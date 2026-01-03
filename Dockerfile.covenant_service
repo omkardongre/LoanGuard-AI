@@ -1,0 +1,25 @@
+# Covenant Service Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+COPY covenant_service/requirements.txt ./covenant_service/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r covenant_service/requirements.txt
+
+COPY common/ ./common/
+COPY covenant_service/ ./covenant_service/
+
+RUN mkdir -p logs models
+
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8082
+
+EXPOSE 8082
+
+CMD ["python", "-m", "covenant_service", "--host", "0.0.0.0", "--port", "8082"]

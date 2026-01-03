@@ -1,0 +1,25 @@
+# ESG Service Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+COPY esg_service/requirements.txt ./esg_service/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r esg_service/requirements.txt
+
+COPY common/ ./common/
+COPY esg_service/ ./esg_service/
+
+RUN mkdir -p logs
+
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8083
+
+EXPOSE 8083
+
+CMD ["python", "-m", "esg_service", "--host", "0.0.0.0", "--port", "8083"]

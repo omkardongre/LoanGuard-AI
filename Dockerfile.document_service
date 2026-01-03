@@ -1,0 +1,25 @@
+# Document Service Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+COPY document_service/requirements.txt ./document_service/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r document_service/requirements.txt
+
+COPY common/ ./common/
+COPY document_service/ ./document_service/
+
+RUN mkdir -p logs
+
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8081
+
+EXPOSE 8081
+
+CMD ["python", "-m", "document_service", "--host", "0.0.0.0", "--port", "8081"]

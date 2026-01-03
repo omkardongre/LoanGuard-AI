@@ -1,0 +1,31 @@
+"""
+Breach Predictor Agent - Predicts covenant breaches using ML with SHAP explanations.
+"""
+
+import logging
+from google.adk.agents import Agent
+from google.adk.tools import FunctionTool
+
+from covenant_service.covenant_service.config import MODEL
+from covenant_service.covenant_service.prompts import BREACH_PREDICTOR_PROMPT
+from covenant_service.covenant_service.tools.ml_tools import (
+    predict_breach_probability,
+    get_shap_explanation,
+    get_feature_importance,
+    generate_risk_score,
+)
+
+logger = logging.getLogger(__name__)
+
+predict_tool = FunctionTool(func=predict_breach_probability)
+shap_tool = FunctionTool(func=get_shap_explanation)
+importance_tool = FunctionTool(func=get_feature_importance)
+risk_score_tool = FunctionTool(func=generate_risk_score)
+
+breach_predictor_agent = Agent(
+    name="BreachPredictorAgent",
+    model=MODEL,
+    description="Predicts breach probability with explainable AI using SHAP",
+    instruction=BREACH_PREDICTOR_PROMPT,
+    tools=[predict_tool, shap_tool, importance_tool, risk_score_tool],
+)

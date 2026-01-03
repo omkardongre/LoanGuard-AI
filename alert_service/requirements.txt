@@ -1,0 +1,28 @@
+# Alert Service Dependencies
+
+# Google ADK and Cloud
+google-adk>=1.0.0
+google-cloud-aiplatform>=1.96.0
+google-cloud-bigquery>=3.34.0
+google-genai>=1.19.0
+vertexai
+
+# A2A Protocol
+a2a-sdk>=0.2.5
+
+# Web Framework
+uvicorn>=0.27.0
+starlette>=0.35.0
+click>=8.1.0
+
+# Email
+sendgrid>=6.11.0
+
+# Reporting
+reportlab>=4.1.0
+matplotlib>=3.8.0
+
+# Utilities
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+requests>=2.31.0

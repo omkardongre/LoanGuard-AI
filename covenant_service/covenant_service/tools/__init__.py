@@ -22,15 +22,11 @@ from covenant_service.covenant_service.tools.compliance_tools import (
     calculate_buffer_percentage,
 )
 from covenant_service.covenant_service.tools.ml_tools import (
-    predict_breach_probability,
-    get_shap_explanation,
+    predict_breach,
+    explain_prediction,
     get_feature_importance,
-    generate_risk_score,
-)
-from covenant_service.covenant_service.tools.gcs_model_loader import (
-    get_model_loader,
-    predict_breach_probability as predict_breach_with_gcs,
-    ModelLoader,
+    get_risk_score,
+    get_predictor,
 )
 from covenant_service.covenant_service.tools.risk_velocity_tools import (
     calculate_metric_velocity,
@@ -67,11 +63,12 @@ __all__ = [
     "determine_status_color",
     "check_cross_default",
     "calculate_buffer_percentage",
-    # ML/Prediction
-    "predict_breach_probability",
-    "get_shap_explanation",
+    # ML/Prediction (v2.0 - Real Lending Club Data)
+    "predict_breach",
+    "explain_prediction",
     "get_feature_importance",
-    "generate_risk_score",
+    "get_risk_score",
+    "get_predictor",
     # Risk Velocity
     "calculate_metric_velocity",
     "calculate_loan_velocity",
@@ -87,4 +84,3 @@ __all__ = [
     "ComplianceStatus",
     "TrendDirection",
 ]
-

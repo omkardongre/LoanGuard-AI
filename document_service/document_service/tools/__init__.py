@@ -12,6 +12,11 @@ from document_service.document_service.tools.document_ai import (
     extract_entities_from_document,
     extract_tables_from_document,
 )
+from document_service.document_service.tools.affinda_parser import (
+    parse_with_affinda,
+    parse_document_bytes_with_affinda,
+    get_extraction_summary,
+)
 from document_service.document_service.tools.covenant_parser import (
     extract_financial_covenants,
     extract_esg_covenants,
@@ -37,21 +42,30 @@ from document_service.document_service.tools.lexnlp_tools import (
 )
 
 __all__ = [
+    # V8 - Primary parser (Affinda)
+    "parse_with_affinda",
+    "parse_document_bytes_with_affinda",
+    "get_extraction_summary",
+    # Legacy parsers
     "parse_pdf_file",
     "identify_sections",
     "process_document_with_ai",
     "extract_text_from_document",
     "extract_entities_from_document",
     "extract_tables_from_document",
+    # Covenant extraction
     "extract_financial_covenants",
     "extract_esg_covenants",
     "classify_covenant_type",
+    # Entity extraction
     "extract_parties",
     "extract_financial_terms",
     "extract_key_dates",
+    # Validation
     "validate_document_completeness",
     "validate_cross_references",
     "validate_covenant_definitions",
+    # LexNLP tools
     "extract_money_amounts",
     "extract_dates",
     "extract_percentages",
@@ -59,3 +73,4 @@ __all__ = [
     "extract_covenant_clauses",
     "analyze_document",
 ]
+

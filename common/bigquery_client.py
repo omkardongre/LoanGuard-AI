@@ -155,3 +155,8 @@ class BigQueryClient:
 
 # Singleton instance
 bq_client = BigQueryClient()
+
+
+def get_bigquery_client() -> BigQueryClient:
+    """Get the singleton BigQueryClient instance."""
+    return bq_client

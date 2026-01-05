@@ -127,3 +127,6 @@ out/
 
 # Docker
 *.tar
+
+# Sample documents (not for production)
+sample_documents/

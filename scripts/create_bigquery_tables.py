@@ -116,6 +116,23 @@ def create_tables(client: bigquery.Client, dataset_id: str) -> None:
             bigquery.SchemaField("processed_at", "TIMESTAMP"),
             bigquery.SchemaField("status", "STRING"),
         ],
+        # V8 New Table (Affinda Integration)
+        "document_extractions": [
+            bigquery.SchemaField("extraction_id", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("loan_id", "STRING"),
+            bigquery.SchemaField("document_filename", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("extraction_source", "STRING"),
+            bigquery.SchemaField("extraction_confidence", "FLOAT64"),
+            bigquery.SchemaField("borrower_name", "STRING"),
+            bigquery.SchemaField("lender_name", "STRING"),
+            bigquery.SchemaField("loan_amount", "FLOAT64"),
+            bigquery.SchemaField("currency", "STRING"),
+            bigquery.SchemaField("maturity_date", "DATE"),
+            bigquery.SchemaField("interest_rate", "STRING"),
+            bigquery.SchemaField("covenants_json", "JSON"),
+            bigquery.SchemaField("raw_text", "STRING"),
+            bigquery.SchemaField("created_at", "TIMESTAMP"),
+        ],
     }
 
     for table_name, schema in tables.items():

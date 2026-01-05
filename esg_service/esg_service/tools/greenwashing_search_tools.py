@@ -1,7 +1,10 @@
 """
-Enhanced Greenwashing Detection with External Search - V6 P0 Feature
+Enhanced Greenwashing Detection with External Search - V8 Production
 
-Cross-checks ESG claims against external news sources using Google Custom Search API.
+Cross-checks ESG claims against external news sources using:
+- Google Custom Search API (primary)
+- News API (supplementary validation)
+
 This is the HERO FEATURE for the demo - catches greenwashing before regulators do.
 
 Market Context:
@@ -15,16 +18,17 @@ import os
 import asyncio
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
-import aiohttp
+import httpx
 
 logger = logging.getLogger(__name__)
 
 
 class GreenwashingRisk(Enum):
     """Greenwashing risk levels."""
+    CRITICAL = "CRITICAL"
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
     LOW = "LOW"
@@ -58,7 +62,8 @@ NEGATIVE_KEYWORDS = [
     "fine", "fined", "penalty", "lawsuit", "violation",
     "controversy", "scandal", "pollution", "accused",
     "investigation", "fraud", "misleading", "greenwashing",
-    "criticized", "criticized", "emissions", "spill",
+    "criticism", "criticized", "emissions", "spill",
+    "breach", "deceptive", "false claims", "regulators",
 ]
 
 
@@ -71,41 +76,74 @@ class SearchResult:
     source: str
     is_negative: bool
     severity: str
+    published_at: str = ""
+
+
+@dataclass
+class GreenwashingReport:
+    """Complete greenwashing analysis report."""
+    borrower: str
+    analysis_timestamp: str
+    claims_analyzed: int
+    overall_score: float
+    overall_risk: str
+    high_risk_claims: int
+    contradicted_claims: int
+    results: List[Dict[str, Any]] = field(default_factory=list)
+    news_alerts: List[Dict[str, Any]] = field(default_factory=list)
+    recommendation: str = ""
+    external_search_enabled: bool = False
+    news_api_enabled: bool = False
 
 
 class GreenwashingDetector:
     """
-    Detect ESG greenwashing by verifying claims against external sources.
-    Uses Google Custom Search API for real-time verification.
+    Production-grade greenwashing detection using:
+    1. Google Custom Search API - for web-wide contradiction search
+    2. News API - for real-time news validation
+    
+    V8 Enhancement: Added News API integration for enhanced detection.
     """
+    
+    GOOGLE_SEARCH_URL = "https://www.googleapis.com/customsearch/v1"
+    NEWS_API_URL = "https://newsapi.org/v2/everything"
     
     def __init__(
         self,
         search_api_key: Optional[str] = None,
         search_engine_id: Optional[str] = None,
+        news_api_key: Optional[str] = None,
     ):
         """
-        Initialize detector with Google Custom Search credentials.
+        Initialize detector with API credentials.
         
         Args:
             search_api_key: Google API key (defaults to env var)
             search_engine_id: Custom Search Engine ID (defaults to env var)
+            news_api_key: News API key (defaults to env var)
         """
         self.search_api_key = search_api_key or os.getenv("GOOGLE_SEARCH_API_KEY")
         self.search_engine_id = search_engine_id or os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+        self.news_api_key = news_api_key or os.getenv("NEWS_API_KEY")
+        
         self.search_enabled = bool(self.search_api_key and self.search_engine_id)
+        self.news_enabled = bool(self.news_api_key)
         
         if not self.search_enabled:
             logger.warning(
                 "Google Search API not configured. "
-                "Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID for full functionality."
+                "Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID."
             )
+        
+        if not self.news_enabled:
+            logger.info("News API not configured. News validation disabled.")
     
     async def detect_greenwashing(
         self,
         borrower_name: str,
         esg_claims: List[Dict[str, Any]],
         include_external_search: bool = True,
+        include_news_search: bool = True,
     ) -> Dict[str, Any]:
         """
         Analyze ESG claims for potential greenwashing.
@@ -113,21 +151,28 @@ class GreenwashingDetector:
         Args:
             borrower_name: Company name
             esg_claims: List of claims like {"text": "Carbon neutral by 2030", "category": "emissions"}
-            include_external_search: Whether to search external sources
+            include_external_search: Whether to search Google
+            include_news_search: Whether to search News API
         
         Returns:
             Comprehensive greenwashing analysis with risk score
         """
         results = []
+        news_alerts = []
         
+        # 1. Search for general company news alerts (if News API enabled)
+        if include_news_search and self.news_enabled:
+            news_alerts = await self._search_company_news(borrower_name)
+        
+        # 2. Analyze each claim
         for claim in esg_claims:
             claim_text = claim.get("text", "")
             category = claim.get("category", "general")
             
-            # 1. Analyze claim language for red flags
+            # Analyze claim language for red flags
             language_analysis = self._analyze_language(claim_text)
             
-            # 2. Search for external evidence (if enabled)
+            # Search for external evidence (if enabled)
             contradictions = []
             supporting = []
             
@@ -139,12 +184,12 @@ class GreenwashingDetector:
                     borrower_name, claim_text
                 )
             
-            # 3. Calculate verification score
+            # Calculate verification score
             score = self._calculate_verification_score(
                 language_analysis, contradictions, supporting
             )
             
-            # 4. Determine verdict and risk
+            # Determine verdict and risk
             verdict = self._get_verdict(score)
             risk_level = self._get_risk_level(score, contradictions)
             
@@ -183,14 +228,21 @@ class GreenwashingDetector:
         # Overall assessment
         if results:
             avg_score = sum(r["verification_score"] for r in results) / len(results)
-            high_risk = [r for r in results if r["risk_level"] == "HIGH"]
+            high_risk = [r for r in results if r["risk_level"] in ["HIGH", "CRITICAL"]]
             contradicted = [r for r in results if r["verdict"] == "CONTRADICTED"]
         else:
             avg_score = 1.0
             high_risk = []
             contradicted = []
         
-        overall_risk = self._determine_overall_risk(avg_score, high_risk, contradicted)
+        # Factor in news alerts
+        critical_news = [n for n in news_alerts if n.get("severity") == "CRITICAL"]
+        if critical_news:
+            avg_score = max(0.1, avg_score - 0.2)
+        
+        overall_risk = self._determine_overall_risk(
+            avg_score, high_risk, contradicted, news_alerts
+        )
         
         return {
             "success": True,
@@ -202,17 +254,25 @@ class GreenwashingDetector:
             "overall_risk": overall_risk.value,
             "high_risk_claims": len(high_risk),
             "contradicted_claims": len(contradicted),
+            "news_alerts": news_alerts,
+            "news_alert_count": len(news_alerts),
             "external_search_enabled": self.search_enabled and include_external_search,
-            "recommendation": self._get_recommendation(overall_risk, high_risk, contradicted),
+            "news_api_enabled": self.news_enabled and include_news_search,
+            "recommendation": self._get_recommendation(
+                overall_risk, high_risk, contradicted, news_alerts
+            ),
             "regulatory_context": {
                 "dws_fine_2025": "€25M for ESG greenwashing",
                 "cma_enforcement": "Starting Autumn 2025",
+                "eu_sfdr": "ESG disclosure requirements",
                 "risk_if_undetected": "Up to €25M+ in regulatory fines",
             },
         }
     
     def _analyze_language(self, claim_text: str) -> Dict[str, Any]:
         """Analyze ESG claim language for red flags."""
+        import re
+        
         text_lower = claim_text.lower()
         flags = []
         
@@ -220,7 +280,6 @@ class GreenwashingDetector:
         vague_found = [term for term in VAGUE_TERMS if term in text_lower]
         
         # Check for quantification (numbers/percentages)
-        import re
         has_numbers = bool(re.search(r'\d+(?:\.\d+)?%?', claim_text))
         
         # Check for timeline
@@ -263,6 +322,79 @@ class GreenwashingDetector:
             "flags": flags,
             "flag_count": len(flags),
         }
+    
+    async def _search_company_news(
+        self,
+        company: str,
+    ) -> List[Dict[str, Any]]:
+        """Search for recent company news related to ESG/greenwashing."""
+        if not self.news_enabled:
+            return []
+        
+        queries = [
+            f"{company} greenwashing",
+            f"{company} ESG controversy",
+            f"{company} environmental fine",
+        ]
+        
+        alerts = []
+        
+        for query in queries:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    response = await client.get(
+                        self.NEWS_API_URL,
+                        params={
+                            "q": query,
+                            "language": "en",
+                            "sortBy": "publishedAt",
+                            "pageSize": 5,
+                            "apiKey": self.news_api_key,
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        for article in data.get("articles", [])[:3]:
+                            title = article.get("title", "").lower()
+                            description = article.get("description", "") or ""
+                            
+                            # Determine severity
+                            severity = "LOW"
+                            combined_text = f"{title} {description}".lower()
+                            
+                            if any(kw in combined_text for kw in 
+                                   ["fine", "fined", "penalty", "lawsuit", "fraud"]):
+                                severity = "CRITICAL"
+                            elif any(kw in combined_text for kw in 
+                                     ["investigation", "accused", "controversy"]):
+                                severity = "HIGH"
+                            elif any(kw in combined_text for kw in NEGATIVE_KEYWORDS):
+                                severity = "MEDIUM"
+                            
+                            if severity != "LOW":
+                                alerts.append({
+                                    "title": article.get("title"),
+                                    "source": article.get("source", {}).get("name"),
+                                    "url": article.get("url"),
+                                    "published_at": article.get("publishedAt"),
+                                    "description": description[:200],
+                                    "severity": severity,
+                                    "query": query,
+                                })
+            except Exception as e:
+                logger.warning(f"News API error for query '{query}': {e}")
+        
+        # Deduplicate by title
+        seen_titles = set()
+        unique_alerts = []
+        for alert in alerts:
+            title_key = alert.get("title", "")[:50]
+            if title_key not in seen_titles:
+                seen_titles.add(title_key)
+                unique_alerts.append(alert)
+        
+        return unique_alerts
     
     async def _search_contradictions(
         self,
@@ -309,7 +441,6 @@ class GreenwashingDetector:
         claim: str,
     ) -> List[SearchResult]:
         """Search for evidence supporting the ESG claim."""
-        # Extract key terms from claim
         queries = [
             f"{company} sustainability report",
             f"{company} ESG certification verified",
@@ -345,7 +476,6 @@ class GreenwashingDetector:
         if not self.search_enabled:
             return []
         
-        url = "https://www.googleapis.com/customsearch/v1"
         params = {
             "key": self.search_api_key,
             "cx": self.search_engine_id,
@@ -355,15 +485,16 @@ class GreenwashingDetector:
         }
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=10) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data.get("items", [])
-                    else:
-                        logger.warning(f"Search API returned status {resp.status}")
-                        return []
-        except asyncio.TimeoutError:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(self.GOOGLE_SEARCH_URL, params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("items", [])
+                else:
+                    logger.warning(f"Search API returned status {response.status_code}")
+                    return []
+        except httpx.TimeoutException:
             logger.warning(f"Search timeout for query: {query}")
             return []
         except Exception as e:
@@ -426,7 +557,9 @@ class GreenwashingDetector:
         """Get risk level based on score and contradictions."""
         high_severity = any(c.severity == "HIGH" for c in contradictions)
         
-        if score < 0.3 or high_severity:
+        if score < 0.2 or (high_severity and len(contradictions) > 2):
+            return GreenwashingRisk.CRITICAL
+        elif score < 0.3 or high_severity:
             return GreenwashingRisk.HIGH
         elif score < 0.6:
             return GreenwashingRisk.MEDIUM
@@ -438,9 +571,14 @@ class GreenwashingDetector:
         avg_score: float,
         high_risk: List[Dict],
         contradicted: List[Dict],
+        news_alerts: List[Dict],
     ) -> GreenwashingRisk:
         """Determine overall greenwashing risk."""
-        if contradicted or len(high_risk) >= 2:
+        critical_news = [n for n in news_alerts if n.get("severity") == "CRITICAL"]
+        
+        if critical_news or len(contradicted) >= 2:
+            return GreenwashingRisk.CRITICAL
+        elif contradicted or len(high_risk) >= 2:
             return GreenwashingRisk.HIGH
         elif high_risk or avg_score < 0.5:
             return GreenwashingRisk.MEDIUM
@@ -452,9 +590,22 @@ class GreenwashingDetector:
         risk: GreenwashingRisk,
         high_risk: List[Dict],
         contradicted: List[Dict],
+        news_alerts: List[Dict],
     ) -> str:
         """Get recommendation based on analysis."""
-        if risk == GreenwashingRisk.HIGH:
+        if risk == GreenwashingRisk.CRITICAL:
+            critical_news = [n for n in news_alerts if n.get("severity") == "CRITICAL"]
+            if critical_news:
+                return (
+                    "🚨 CRITICAL: Active regulatory/legal issues detected in news. "
+                    "Halt ESG-linked lending until full due diligence complete. "
+                    "Request legal review and independent ESG audit."
+                )
+            return (
+                "🚨 CRITICAL: Multiple ESG claims are contradicted by external evidence. "
+                "Immediate escalation to risk committee required."
+            )
+        elif risk == GreenwashingRisk.HIGH:
             if contradicted:
                 return (
                     "🚨 URGENT: Found contradictions to ESG claims. "
@@ -477,12 +628,25 @@ class GreenwashingDetector:
             )
 
 
+# Singleton instance
+_detector: Optional[GreenwashingDetector] = None
+
+
+def get_greenwashing_detector() -> GreenwashingDetector:
+    """Get or create greenwashing detector singleton."""
+    global _detector
+    if _detector is None:
+        _detector = GreenwashingDetector()
+    return _detector
+
+
 # Synchronous wrapper for non-async contexts
 def detect_greenwashing_sync(
     borrower_name: str,
     esg_claims: List[Dict[str, Any]],
     search_api_key: Optional[str] = None,
     search_engine_id: Optional[str] = None,
+    news_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Synchronous wrapper for greenwashing detection.
@@ -492,21 +656,30 @@ def detect_greenwashing_sync(
         esg_claims: List of ESG claims
         search_api_key: Optional Google API key
         search_engine_id: Optional Search Engine ID
+        news_api_key: Optional News API key
     
     Returns:
         Greenwashing analysis result
     """
-    detector = GreenwashingDetector(search_api_key, search_engine_id)
+    detector = GreenwashingDetector(search_api_key, search_engine_id, news_api_key)
     
     try:
-        loop = asyncio.get_event_loop()
+        # Check if we're in an existing event loop
+        loop = asyncio.get_running_loop()
+        # If we're here, we're in an async context - create a new thread
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(
+                asyncio.run,
+                detector.detect_greenwashing(borrower_name, esg_claims)
+            )
+            return future.result()
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    return loop.run_until_complete(
-        detector.detect_greenwashing(borrower_name, esg_claims)
-    )
+        # No event loop running - safe to use asyncio.run
+        return asyncio.run(
+            detector.detect_greenwashing(borrower_name, esg_claims)
+        )
+
 
 
 # Tool function for ADK agent
@@ -534,3 +707,21 @@ def analyze_greenwashing(
     ]
     
     return detect_greenwashing_sync(borrower_name, esg_claims)
+
+
+async def detect_greenwashing_async(
+    borrower_name: str,
+    esg_claims: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Async convenience function for greenwashing detection.
+    
+    Args:
+        borrower_name: Company name
+        esg_claims: List of ESG claims
+    
+    Returns:
+        Greenwashing analysis result
+    """
+    detector = get_greenwashing_detector()
+    return await detector.detect_greenwashing(borrower_name, esg_claims)

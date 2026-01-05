@@ -129,6 +129,35 @@ class BigQueryClient:
         """
         return self.execute_query(query)
 
+    def get_all_loans(
+        self,
+        status: Optional[str] = None,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve all loans, optionally filtered by status.
+        
+        Args:
+            status: Filter by loan status (e.g., 'ACTIVE', 'CLOSED')
+            limit: Maximum number of loans to return
+            
+        Returns:
+            List of loan dictionaries
+        """
+        if status:
+            query = f"""
+                SELECT *
+                FROM `{self.get_full_table_id(settings.BIGQUERY_LOANS_TABLE)}`
+                WHERE status = @status
+                ORDER BY created_at DESC
+                LIMIT {limit}
+            """
+            params = [bigquery.ScalarQueryParameter("status", "STRING", status)]
+            return self.execute_query(query, params)
+        else:
+            return self.get_loans(limit=limit)
+
+
     def get_compliance_summary(self, loan_id: str) -> Dict[str, Any]:
         """Get compliance summary for a loan."""
         query = f"""

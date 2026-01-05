@@ -3,7 +3,7 @@ Tools for Covenant Service agents.
 """
 
 from covenant_service.covenant_service.tools.bigquery_tools import (
-    get_loan_details,
+    get_loan_data,
     get_covenant_definitions,
     get_latest_financials,
     get_historical_measurements,
@@ -42,29 +42,49 @@ from covenant_service.covenant_service.tools.cure_calculator_tools import (
     calculate_cure_options,
     get_cure_options,
 )
+from covenant_service.covenant_service.tools.dashboard_tools import (
+    get_loan_dashboard,
+    get_portfolio_dashboard,
+    get_covenant_detail,
+    ComplianceStatus,
+    TrendDirection,
+)
 
 __all__ = [
-    "get_loan_details",
+    # Data retrieval
+    "get_loan_data",
     "get_covenant_definitions",
     "get_latest_financials",
     "get_historical_measurements",
+    # Calculations
     "calculate_debt_to_ebitda",
     "calculate_interest_coverage",
     "calculate_current_ratio",
     "calculate_net_worth",
     "calculate_fixed_charge_coverage",
+    # Compliance
     "check_covenant_compliance",
     "determine_status_color",
     "check_cross_default",
     "calculate_buffer_percentage",
+    # ML/Prediction
     "predict_breach_probability",
     "get_shap_explanation",
     "get_feature_importance",
     "generate_risk_score",
+    # Risk Velocity
     "calculate_metric_velocity",
     "calculate_loan_velocity",
     "calculate_portfolio_velocity",
     "get_risk_velocity",
+    # Cure Calculator
     "calculate_cure_options",
     "get_cure_options",
+    # Dashboard (V8)
+    "get_loan_dashboard",
+    "get_portfolio_dashboard",
+    "get_covenant_detail",
+    "ComplianceStatus",
+    "TrendDirection",
 ]
+

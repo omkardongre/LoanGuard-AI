@@ -1,0 +1,78 @@
+[
+  {
+    "feature": "int_rate",
+    "importance": 0.27089332049336634
+  },
+  {
+    "feature": "grade",
+    "importance": 0.2399125478838938
+  },
+  {
+    "feature": "term",
+    "importance": 0.20353777897129985
+  },
+  {
+    "feature": "fico_range_low",
+    "importance": 0.12451649328181108
+  },
+  {
+    "feature": "dti",
+    "importance": 0.1164178491048686
+  },
+  {
+    "feature": "home_ownership",
+    "importance": 0.11290434678106012
+  },
+  {
+    "feature": "open_acc",
+    "importance": 0.09133160195443198
+  },
+  {
+    "feature": "annual_inc",
+    "importance": 0.08696333301486002
+  },
+  {
+    "feature": "mort_acc",
+    "importance": 0.08572149566625194
+  },
+  {
+    "feature": "loan_amnt",
+    "importance": 0.08547355482501193
+  },
+  {
+    "feature": "inq_last_6mths",
+    "importance": 0.07474940327238322
+  },
+  {
+    "feature": "revol_bal",
+    "importance": 0.0665103735205662
+  },
+  {
+    "feature": "verification_status",
+    "importance": 0.047530267391777035
+  },
+  {
+    "feature": "revol_util",
+    "importance": 0.03694121723935033
+  },
+  {
+    "feature": "installment",
+    "importance": 0.03519498339953255
+  },
+  {
+    "feature": "total_acc",
+    "importance": 0.03486548582379756
+  },
+  {
+    "feature": "purpose",
+    "importance": 0.02705662992056121
+  },
+  {
+    "feature": "pub_rec",
+    "importance": 0.01596913971225082
+  },
+  {
+    "feature": "delinq_2yrs",
+    "importance": 0.014956702335718981
+  }
+]

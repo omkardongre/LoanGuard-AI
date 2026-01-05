@@ -1,0 +1,89 @@
+{
+  "numeric_features": [
+    "loan_amnt",
+    "int_rate",
+    "installment",
+    "annual_inc",
+    "dti",
+    "fico_range_low",
+    "open_acc",
+    "revol_bal",
+    "revol_util",
+    "total_acc",
+    "delinq_2yrs",
+    "inq_last_6mths",
+    "pub_rec",
+    "mort_acc"
+  ],
+  "categorical_features": [
+    "grade",
+    "home_ownership",
+    "verification_status",
+    "purpose",
+    "term"
+  ],
+  "feature_order": [
+    "loan_amnt",
+    "int_rate",
+    "installment",
+    "annual_inc",
+    "dti",
+    "fico_range_low",
+    "open_acc",
+    "revol_bal",
+    "revol_util",
+    "total_acc",
+    "delinq_2yrs",
+    "inq_last_6mths",
+    "pub_rec",
+    "mort_acc",
+    "grade",
+    "home_ownership",
+    "verification_status",
+    "purpose",
+    "term"
+  ],
+  "encodings": {
+    "grade": {
+      "A": 0,
+      "B": 1,
+      "C": 2,
+      "D": 3,
+      "E": 4,
+      "F": 5,
+      "G": 6
+    },
+    "home_ownership": {
+      "ANY": 0,
+      "MORTGAGE": 1,
+      "NONE": 2,
+      "OWN": 3,
+      "RENT": 4
+    },
+    "verification_status": {
+      "Not Verified": 0,
+      "Source Verified": 1,
+      "Verified": 2
+    },
+    "purpose": {
+      "car": 0,
+      "credit_card": 1,
+      "debt_consolidation": 2,
+      "educational": 3,
+      "home_improvement": 4,
+      "house": 5,
+      "major_purchase": 6,
+      "medical": 7,
+      "moving": 8,
+      "other": 9,
+      "renewable_energy": 10,
+      "small_business": 11,
+      "vacation": 12,
+      "wedding": 13
+    },
+    "term": {
+      "36.0": 0,
+      "60.0": 1
+    }
+  }
+}

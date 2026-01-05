@@ -106,9 +106,13 @@ COMPLETE_HONEST_ASSESSMENT.md
 VERIFICATION_REPORT.md
 SETUP_GUIDE.md
 
-# ML models (generated locally)
-models/*.pkl
-models/*.json
+# ML models - track trained models, exclude training data
+models/training_data.csv
+models/*.csv
+
+# Training data (large files)
+data/
+*.csv.gz
 
 # OS files
 .DS_Store

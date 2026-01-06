@@ -35,6 +35,7 @@ import {
   Calculator,
   FileText,
   RefreshCw,
+  DollarSign,
 } from "lucide-react";
 import {
   fetchLoan,
@@ -47,6 +48,7 @@ import {
   calculateCure,
   downloadLoanPdfReport,
   triggerPdfDownload,
+  fetchLGD,
   type Loan,
   type Covenant,
   type ESGKpi,
@@ -54,7 +56,9 @@ import {
   type SHAPExplanation,
   type RiskVelocity,
   type CureResult,
+  type LGDPrediction,
 } from "@/lib/api";
+import { LGDCard } from "@/components/lgd-card";
 
 function formatCurrency(amount: number, currency: string = "USD") {
   return new Intl.NumberFormat("en-US", {
@@ -76,6 +80,7 @@ export default function LoanDetailPage() {
   const [explanation, setExplanation] = useState<SHAPExplanation | null>(null);
   const [velocity, setVelocity] = useState<RiskVelocity | null>(null);
   const [cureOptions, setCureOptions] = useState<CureResult | null>(null);
+  const [lgdData, setLgdData] = useState<LGDPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -104,12 +109,14 @@ export default function LoanDetailPage() {
           kpiData,
           predictionData,
           velocityData,
+          lgdResult,
         ] = await Promise.allSettled([
           fetchLoan(loanId),
           fetchCovenants(loanId),
           fetchESGKpis(loanId),
           fetchBreachPrediction(loanId),
           fetchLoanVelocity(loanId),
+          fetchLGD(loanId),
         ]);
 
         if (loanData.status === "fulfilled") setLoan(loanData.value);
@@ -119,6 +126,7 @@ export default function LoanDetailPage() {
         if (predictionData.status === "fulfilled")
           setPrediction(predictionData.value);
         if (velocityData.status === "fulfilled") setVelocity(velocityData.value);
+        if (lgdResult.status === "fulfilled") setLgdData(lgdResult.value);
 
         // Load SHAP explanation separately if prediction available
         if (predictionData.status === "fulfilled") {
@@ -233,7 +241,7 @@ export default function LoanDetailPage() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 mb-2">
@@ -261,6 +269,26 @@ export default function LoanDetailPage() {
                 {prediction
                   ? `${(prediction.breach_probability * 100).toFixed(0)}%`
                   : "-"}
+              </p>
+            </CardContent>
+          </Card>
+          {/* LGD Stat Card - NEW */}
+          <Card className="bg-gradient-to-br from-purple-50 to-blue-50 border-purple-100">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="h-5 w-5 text-purple-500" />
+                <p className="text-sm text-slate-500">LGD (Basel III)</p>
+              </div>
+              <p
+                className={`text-2xl font-bold ${
+                  (lgdData?.lgd || 0) > 0.7
+                    ? "text-red-600"
+                    : (lgdData?.lgd || 0) > 0.5
+                    ? "text-amber-600"
+                    : "text-emerald-600"
+                }`}
+              >
+                {lgdData ? lgdData.lgd_pct : "-"}
               </p>
             </CardContent>
           </Card>
@@ -312,6 +340,7 @@ export default function LoanDetailPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="covenants">Covenants</TabsTrigger>
             <TabsTrigger value="predictions">ML Predictions</TabsTrigger>
+            <TabsTrigger value="lgd">LGD Analysis</TabsTrigger>
             <TabsTrigger value="velocity">Risk Velocity</TabsTrigger>
             <TabsTrigger value="cure">Cure Calculator</TabsTrigger>
             {loan.is_sll && <TabsTrigger value="esg">ESG</TabsTrigger>}
@@ -619,6 +648,74 @@ export default function LoanDetailPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* LGD Analysis Tab - NEW */}
+          <TabsContent value="lgd" className="mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <LGDCard loanId={loanId} />
+              
+              {/* ECL Calculator Preview */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-blue-600" />
+                    ECL Calculation (Basel III)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-slate-600">
+                    Expected Credit Loss calculation using the Two-Stage LGD model.
+                  </p>
+                  
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg space-y-3">
+                    <p className="font-mono text-sm font-medium text-blue-800">
+                      ECL = PD × LGD × EAD
+                    </p>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-xs text-slate-500">PD</p>
+                        <p className="text-lg font-bold text-purple-600">
+                          {prediction
+                            ? `${(prediction.breach_probability * 100).toFixed(1)}%`
+                            : "--"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">LGD</p>
+                        <p className="text-lg font-bold text-purple-600">
+                          {lgdData ? lgdData.lgd_pct : "--"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">EAD</p>
+                        <p className="text-lg font-bold text-purple-600">
+                          {formatCurrency(loan.facility_amount, loan.currency)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {prediction && lgdData && (
+                      <div className="pt-3 border-t border-blue-200">
+                        <p className="text-xs text-slate-500 text-center">Expected Credit Loss</p>
+                        <p className="text-2xl font-bold text-center text-red-600">
+                          {formatCurrency(
+                            prediction.breach_probability * lgdData.lgd * loan.facility_amount,
+                            loan.currency
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="text-xs text-slate-500">
+                    <p><strong>Model:</strong> Two-Stage LGD V2 (XGBoost + LightGBM Ensemble)</p>
+                    <p><strong>Training Data:</strong> 148K Lending Club charged-off loans</p>
+                    <p><strong>Combined MAE:</strong> 6.45%</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Risk Velocity Tab */}

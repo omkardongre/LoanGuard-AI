@@ -702,6 +702,89 @@ export function triggerPdfDownload(blob: Blob, filename: string): void {
 }
 
 // ============================================
+// LGD / Recovery Rate (V9 - Basel III)
+// ============================================
+
+export interface LGDPrediction {
+  loan_id: string;
+  recovery_rate: number;
+  recovery_rate_pct: string;
+  lgd: number;
+  lgd_pct: string;
+  recovery_category: "HIGH_RECOVERY" | "MODERATE_RECOVERY" | "LOW_RECOVERY" | "MINIMAL_RECOVERY";
+  model_version: string;
+  success: boolean;
+}
+
+export interface LGDExplanation {
+  loan_id: string;
+  stage1_factors: Array<{
+    feature: string;
+    impact: number;
+    value: number;
+  }>;
+  stage2_factors: Array<{
+    feature: string;
+    impact: number;
+    value: number;
+  }>;
+  success: boolean;
+}
+
+export interface LGDModelInfo {
+  success: boolean;
+  model_type: string;
+  version: string;
+  stage1: {
+    type: string;
+    target: string;
+    auc: number;
+  };
+  stage2: {
+    type: string;
+    target: string;
+    mae: number;
+  };
+  combined_mae: number;
+  training_data: string;
+  formula: string;
+}
+
+export async function fetchLGD(loanId: string): Promise<LGDPrediction> {
+  return apiRequest(`/api/loans/${loanId}/lgd`);
+}
+
+export async function predictLGD(
+  loanId: string,
+  loanData: {
+    loan_amnt?: number;
+    int_rate?: number;
+    grade?: string;
+    annual_inc?: number;
+    dti?: number;
+    fico_range_low?: number;
+    fico_range_high?: number;
+  }
+): Promise<LGDPrediction> {
+  return apiRequest(`/api/loans/${loanId}/lgd/predict`, {
+    method: "POST",
+    body: JSON.stringify(loanData),
+  });
+}
+
+export async function fetchLGDExplanation(
+  loanId: string,
+  topN?: number
+): Promise<LGDExplanation> {
+  const query = topN ? `?top_n=${topN}` : "";
+  return apiRequest(`/api/loans/${loanId}/lgd/explain${query}`);
+}
+
+export async function fetchLGDModelInfo(): Promise<LGDModelInfo> {
+  return apiRequest("/api/ml/recovery-rate/importance");
+}
+
+// ============================================
 // Health Check
 // ============================================
 

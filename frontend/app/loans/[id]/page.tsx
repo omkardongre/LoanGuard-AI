@@ -60,6 +60,7 @@ import {
 } from "@/lib/api";
 import { LGDCard } from "@/components/lgd-card";
 import { PrepaymentCard } from "@/components/prepayment-card";
+import { ESGRiskCard } from "@/components/esg-risk-card";
 
 function formatCurrency(amount: number, currency: string = "USD") {
   return new Intl.NumberFormat("en-US", {
@@ -1033,6 +1034,12 @@ export default function LoanDetailPage() {
           {/* ESG Tab (for SLL loans) */}
           {loan.is_sll && (
             <TabsContent value="esg" className="mt-6">
+              {/* ESG Risk ML Assessment */}
+              <div className="mb-6">
+                <ESGRiskCard loanId={loanId} />
+              </div>
+
+              {/* ESG KPIs */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

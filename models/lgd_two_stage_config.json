@@ -1,0 +1,250 @@
+{
+  "model_type": "Two-Stage LGD",
+  "stage1": {
+    "type": "LightGBM Classifier",
+    "target": "has_recovery",
+    "description": "Predicts P(recovery > 0)"
+  },
+  "stage2": {
+    "type": "LightGBM Regressor",
+    "target": "recovery_rate",
+    "description": "Predicts recovery_rate given recovery exists"
+  },
+  "formula": "Final LGD = 1 - (P(has_recovery) \u00d7 predicted_recovery_rate)",
+  "feature_order": [
+    "loan_amnt",
+    "funded_amnt",
+    "int_rate",
+    "installment",
+    "annual_inc",
+    "dti",
+    "fico_range_low",
+    "fico_range_high",
+    "open_acc",
+    "revol_bal",
+    "revol_util",
+    "total_acc",
+    "delinq_2yrs",
+    "inq_last_6mths",
+    "pub_rec",
+    "mort_acc",
+    "pub_rec_bankruptcies",
+    "grade",
+    "home_ownership",
+    "verification_status",
+    "purpose",
+    "term",
+    "application_type",
+    "fico_avg",
+    "income_to_loan",
+    "inst_to_inc",
+    "high_revol_util",
+    "has_delinq",
+    "has_bankruptcy"
+  ],
+  "encodings": {
+    "grade": {
+      "A": 0,
+      "B": 1,
+      "C": 2,
+      "D": 3,
+      "E": 4,
+      "F": 5,
+      "G": 6
+    },
+    "home_ownership": {
+      "ANY": 0,
+      "MORTGAGE": 1,
+      "NONE": 2,
+      "OTHER": 3,
+      "OWN": 4,
+      "RENT": 5
+    },
+    "verification_status": {
+      "Not Verified": 0,
+      "Source Verified": 1,
+      "Verified": 2
+    },
+    "purpose": {
+      "car": 0,
+      "credit_card": 1,
+      "debt_consolidation": 2,
+      "educational": 3,
+      "home_improvement": 4,
+      "house": 5,
+      "major_purchase": 6,
+      "medical": 7,
+      "moving": 8,
+      "other": 9,
+      "renewable_energy": 10,
+      "small_business": 11,
+      "vacation": 12,
+      "wedding": 13
+    },
+    "term": {
+      " 36 months": 0,
+      " 60 months": 1,
+      "36 months": 0,
+      "60 months": 1
+    },
+    "application_type": {
+      "Individual": 0,
+      "Joint App": 1,
+      "INDIVIDUAL": 0,
+      "JOINT": 1
+    }
+  },
+  "numeric_features": [
+    "loan_amnt",
+    "funded_amnt",
+    "int_rate",
+    "installment",
+    "annual_inc",
+    "dti",
+    "fico_range_low",
+    "fico_range_high",
+    "open_acc",
+    "revol_bal",
+    "revol_util",
+    "total_acc",
+    "delinq_2yrs",
+    "inq_last_6mths",
+    "pub_rec",
+    "mort_acc",
+    "pub_rec_bankruptcies",
+    "total_rec_prncp",
+    "total_rec_int"
+  ],
+  "categorical_features": [
+    "grade",
+    "home_ownership",
+    "verification_status",
+    "purpose",
+    "term",
+    "application_type"
+  ],
+  "stage1_feature_importance": [
+    {
+      "feature": "int_rate",
+      "importance": 26
+    },
+    {
+      "feature": "annual_inc",
+      "importance": 13
+    },
+    {
+      "feature": "term",
+      "importance": 13
+    },
+    {
+      "feature": "grade",
+      "importance": 12
+    },
+    {
+      "feature": "income_to_loan",
+      "importance": 11
+    },
+    {
+      "feature": "verification_status",
+      "importance": 8
+    },
+    {
+      "feature": "loan_amnt",
+      "importance": 7
+    },
+    {
+      "feature": "fico_range_high",
+      "importance": 6
+    },
+    {
+      "feature": "pub_rec_bankruptcies",
+      "importance": 5
+    },
+    {
+      "feature": "revol_bal",
+      "importance": 4
+    },
+    {
+      "feature": "application_type",
+      "importance": 4
+    },
+    {
+      "feature": "installment",
+      "importance": 3
+    },
+    {
+      "feature": "revol_util",
+      "importance": 3
+    },
+    {
+      "feature": "mort_acc",
+      "importance": 2
+    },
+    {
+      "feature": "dti",
+      "importance": 1
+    }
+  ],
+  "stage2_feature_importance": [
+    {
+      "feature": "int_rate",
+      "importance": 392
+    },
+    {
+      "feature": "dti",
+      "importance": 333
+    },
+    {
+      "feature": "revol_bal",
+      "importance": 294
+    },
+    {
+      "feature": "revol_util",
+      "importance": 280
+    },
+    {
+      "feature": "total_acc",
+      "importance": 267
+    },
+    {
+      "feature": "installment",
+      "importance": 251
+    },
+    {
+      "feature": "annual_inc",
+      "importance": 248
+    },
+    {
+      "feature": "loan_amnt",
+      "importance": 226
+    },
+    {
+      "feature": "income_to_loan",
+      "importance": 213
+    },
+    {
+      "feature": "fico_range_low",
+      "importance": 198
+    },
+    {
+      "feature": "inst_to_inc",
+      "importance": 193
+    },
+    {
+      "feature": "open_acc",
+      "importance": 182
+    },
+    {
+      "feature": "mort_acc",
+      "importance": 115
+    },
+    {
+      "feature": "purpose",
+      "importance": 80
+    },
+    {
+      "feature": "fico_range_high",
+      "importance": 64
+    }
+  ]
+}

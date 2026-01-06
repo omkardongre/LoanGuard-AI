@@ -1,0 +1,82 @@
+[
+  {
+    "feature": "int_rate",
+    "importance": 441
+  },
+  {
+    "feature": "dti",
+    "importance": 349
+  },
+  {
+    "feature": "revol_util",
+    "importance": 322
+  },
+  {
+    "feature": "revol_bal",
+    "importance": 321
+  },
+  {
+    "feature": "annual_inc",
+    "importance": 320
+  },
+  {
+    "feature": "total_acc",
+    "importance": 293
+  },
+  {
+    "feature": "fico_range_low",
+    "importance": 270
+  },
+  {
+    "feature": "loan_amnt",
+    "importance": 265
+  },
+  {
+    "feature": "installment",
+    "importance": 244
+  },
+  {
+    "feature": "open_acc",
+    "importance": 194
+  },
+  {
+    "feature": "mort_acc",
+    "importance": 145
+  },
+  {
+    "feature": "purpose",
+    "importance": 80
+  },
+  {
+    "feature": "pub_rec",
+    "importance": 66
+  },
+  {
+    "feature": "funded_amnt",
+    "importance": 60
+  },
+  {
+    "feature": "term",
+    "importance": 54
+  },
+  {
+    "feature": "verification_status",
+    "importance": 51
+  },
+  {
+    "feature": "grade",
+    "importance": 50
+  },
+  {
+    "feature": "home_ownership",
+    "importance": 49
+  },
+  {
+    "feature": "inq_last_6mths",
+    "importance": 43
+  },
+  {
+    "feature": "delinq_2yrs",
+    "importance": 39
+  }
+]

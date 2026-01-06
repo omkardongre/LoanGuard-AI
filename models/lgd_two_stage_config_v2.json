@@ -1,0 +1,191 @@
+{
+  "model_type": "Two-Stage LGD V2 (Ensemble)",
+  "version": "2.1.0",
+  "stage1": {
+    "type": "XGBoost + LightGBM Ensemble",
+    "target": "has_recovery"
+  },
+  "stage2": {
+    "type": "LightGBM Regressor",
+    "target": "recovery_rate"
+  },
+  "formula": "recovery_rate = P(has_recovery) \u00d7 predicted_recovery_rate",
+  "feature_order": [
+    "loan_amnt",
+    "funded_amnt",
+    "int_rate",
+    "installment",
+    "annual_inc",
+    "dti",
+    "fico_range_low",
+    "fico_range_high",
+    "open_acc",
+    "revol_bal",
+    "revol_util",
+    "total_acc",
+    "delinq_2yrs",
+    "inq_last_6mths",
+    "pub_rec",
+    "mort_acc",
+    "pub_rec_bankruptcies",
+    "mths_since_last_major_derog",
+    "acc_open_past_24mths",
+    "chargeoff_within_12_mths",
+    "collections_12_mths_ex_med",
+    "inq_last_12m",
+    "mths_since_recent_inq",
+    "grade",
+    "home_ownership",
+    "verification_status",
+    "purpose",
+    "term",
+    "application_type",
+    "fico_avg",
+    "last_fico_avg",
+    "fico_change",
+    "income_to_loan",
+    "inst_to_inc",
+    "high_dti",
+    "high_revol_util",
+    "has_delinq",
+    "has_bankruptcy",
+    "recent_chargeoff",
+    "recent_collections",
+    "mths_since_delinq_filled",
+    "mths_since_record_filled"
+  ],
+  "encodings": {
+    "grade": {
+      "A": 0,
+      "B": 1,
+      "C": 2,
+      "D": 3,
+      "E": 4,
+      "F": 5,
+      "G": 6
+    },
+    "home_ownership": {
+      "ANY": 0,
+      "MORTGAGE": 1,
+      "NONE": 2,
+      "OTHER": 3,
+      "OWN": 4,
+      "RENT": 5
+    },
+    "verification_status": {
+      "Not Verified": 0,
+      "Source Verified": 1,
+      "Verified": 2
+    },
+    "purpose": {
+      "car": 0,
+      "credit_card": 1,
+      "debt_consolidation": 2,
+      "educational": 3,
+      "home_improvement": 4,
+      "house": 5,
+      "major_purchase": 6,
+      "medical": 7,
+      "moving": 8,
+      "other": 9,
+      "renewable_energy": 10,
+      "small_business": 11,
+      "vacation": 12,
+      "wedding": 13
+    },
+    "term": {
+      " 36 months": 0,
+      " 60 months": 1,
+      "36 months": 0,
+      "60 months": 1
+    },
+    "application_type": {
+      "Individual": 0,
+      "Joint App": 1,
+      "INDIVIDUAL": 0,
+      "JOINT": 1
+    }
+  },
+  "feature_importance": [
+    {
+      "feature": "annual_inc",
+      "importance": 31
+    },
+    {
+      "feature": "inq_last_12m",
+      "importance": 26
+    },
+    {
+      "feature": "last_fico_avg",
+      "importance": 26
+    },
+    {
+      "feature": "fico_change",
+      "importance": 25
+    },
+    {
+      "feature": "int_rate",
+      "importance": 21
+    },
+    {
+      "feature": "total_acc",
+      "importance": 14
+    },
+    {
+      "feature": "grade",
+      "importance": 12
+    },
+    {
+      "feature": "application_type",
+      "importance": 11
+    },
+    {
+      "feature": "fico_range_low",
+      "importance": 9
+    },
+    {
+      "feature": "income_to_loan",
+      "importance": 9
+    },
+    {
+      "feature": "term",
+      "importance": 8
+    },
+    {
+      "feature": "dti",
+      "importance": 6
+    },
+    {
+      "feature": "revol_util",
+      "importance": 6
+    },
+    {
+      "feature": "mths_since_record_filled",
+      "importance": 6
+    },
+    {
+      "feature": "open_acc",
+      "importance": 5
+    },
+    {
+      "feature": "revol_bal",
+      "importance": 5
+    },
+    {
+      "feature": "installment",
+      "importance": 4
+    },
+    {
+      "feature": "verification_status",
+      "importance": 3
+    },
+    {
+      "feature": "inst_to_inc",
+      "importance": 3
+    },
+    {
+      "feature": "loan_amnt",
+      "importance": 2
+    }
+  ]
+}

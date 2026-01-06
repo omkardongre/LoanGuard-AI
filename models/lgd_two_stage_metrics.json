@@ -1,0 +1,25 @@
+{
+  "stage1_classifier": {
+    "train_accuracy": 0.6530010139122052,
+    "test_accuracy": 0.6499567847882455,
+    "test_auc": 0.5886726515349333,
+    "test_precision": 0.6499567847882455,
+    "test_recall": 1.0,
+    "test_f1": 0.7878470403352541,
+    "positive_class_rate": 0.6499567847882455
+  },
+  "stage2_regressor": {
+    "train_r2": 0.050144548419871704,
+    "test_r2": 0.022309007613889875,
+    "train_mae": 0.0835418233225629,
+    "test_mae": 0.08440590186224045,
+    "train_rmse": 0.13182466139111185,
+    "test_rmse": 0.1329858980126658,
+    "mean_actual": 0.16727068918191737,
+    "n_samples": 78573,
+    "combined_mae": 0.08872321728969429,
+    "combined_rmse": 0.1342849671847125
+  },
+  "model_architecture": "Two-Stage LGD",
+  "data_source": "Lending Club 2007-2018 Charged Off Loans"
+}

@@ -1436,7 +1436,162 @@ async def get_recovery_feature_importance_endpoint():
         return {"success": False, "error": str(e)}
 
 
+# ============================================
+# V9 NEW: PREPAYMENT RISK ENDPOINTS
+# ============================================
+
+class PrepaymentResponse(BaseModel):
+    """Prepayment risk prediction response."""
+    loan_id: str
+    prepay_probability: float
+    prepay_probability_pct: str
+    will_prepay: bool
+    risk_category: str
+    model_version: str
+    success: bool = True
+
+
+@app.get("/api/loans/{loan_id}/prepayment", response_model=PrepaymentResponse, tags=["V9 - Prepayment Risk"])
+async def get_loan_prepayment_risk(loan_id: str):
+    """
+    Get prepayment risk prediction for a specific loan.
+    
+    V9 NEW - XGBoost model predicts probability of early payoff.
+    Uses loan term, grade, interest rate, and borrower profile.
+    """
+    try:
+        from covenant_service.covenant_service.tools.prepayment_predictor import get_prepayment_predictor
+        
+        predictor = get_prepayment_predictor()
+        
+        # Get loan data from database
+        loan_data = {}
+        if client:
+            result = client.table("loans").select("*").eq("loan_id", loan_id).limit(1).maybe_single().execute()
+            if result.data:
+                loan_data = result.data
+        
+        # Map loan data to model features
+        if not loan_data:
+            loan_data = {
+                'term': ' 36 months',
+                'grade': 'B',
+                'int_rate': 10.5,
+                'loan_amnt': 15000,
+                'annual_inc': 65000,
+                'dti': 18.0,
+                'fico_range_low': 680,
+                'fico_range_high': 700,
+            }
+        
+        prediction = predictor.predict(loan_data)
+        
+        return PrepaymentResponse(
+            loan_id=loan_id,
+            prepay_probability=prediction.prepay_probability,
+            prepay_probability_pct=prediction.prepay_probability_pct,
+            will_prepay=prediction.will_prepay,
+            risk_category=prediction.risk_category,
+            model_version=prediction.model_version,
+            success=True,
+        )
+        
+    except Exception as e:
+        logger.error(f"Prepayment prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/loans/{loan_id}/prepayment/predict", tags=["V9 - Prepayment Risk"])
+async def predict_prepayment_with_data(loan_id: str, loan_data: Dict[str, Any] = None):
+    """
+    Predict prepayment risk with custom loan data.
+    
+    V9 NEW - For what-if analysis and new loan assessment.
+    """
+    try:
+        from covenant_service.covenant_service.tools.prepayment_predictor import get_prepayment_predictor
+        
+        predictor = get_prepayment_predictor()
+        
+        if not loan_data:
+            loan_data = {'term': ' 36 months', 'grade': 'B', 'int_rate': 10.0}
+        
+        prediction = predictor.predict(loan_data)
+        
+        return {
+            'loan_id': loan_id,
+            'prepay_probability': prediction.prepay_probability,
+            'prepay_probability_pct': prediction.prepay_probability_pct,
+            'will_prepay': prediction.will_prepay,
+            'risk_category': prediction.risk_category,
+            'model_version': prediction.model_version,
+            'success': True,
+        }
+        
+    except Exception as e:
+        logger.error(f"Prepayment prediction failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/loans/{loan_id}/prepayment/explain", tags=["V9 - Prepayment Risk"])
+async def explain_prepayment_prediction(loan_id: str, top_n: int = 5):
+    """
+    Get explanation for prepayment prediction.
+    
+    V9 NEW - Feature importance and human-readable explanation.
+    """
+    try:
+        from covenant_service.covenant_service.tools.prepayment_predictor import get_prepayment_predictor
+        
+        predictor = get_prepayment_predictor()
+        
+        # Get loan data
+        loan_data = {}
+        if client:
+            result = client.table("loans").select("*").eq("loan_id", loan_id).limit(1).maybe_single().execute()
+            if result.data:
+                loan_data = result.data
+        
+        if not loan_data:
+            loan_data = {'term': ' 36 months', 'grade': 'B', 'int_rate': 10.0}
+        
+        explanation = predictor.explain(loan_data, top_n)
+        explanation['loan_id'] = loan_id
+        return explanation
+        
+    except Exception as e:
+        logger.error(f"Prepayment explanation failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/ml/prepayment/model-info", tags=["V9 - Prepayment Risk"])
+async def get_prepayment_model_info():
+    """
+    Get prepayment model metadata and performance metrics.
+    
+    V9 NEW - Model governance and audit trail.
+    """
+    try:
+        from covenant_service.covenant_service.tools.prepayment_predictor import get_prepayment_predictor
+        
+        predictor = get_prepayment_predictor()
+        info = predictor.get_model_info()
+        
+        # Add metrics from saved file
+        try:
+            import json
+            with open('models/prepayment_metrics.json', 'r') as f:
+                info['metrics'] = json.load(f)
+        except:
+            pass
+        
+        return {'success': True, **info}
+        
+    except Exception as e:
+        logger.error(f"Model info retrieval failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
-

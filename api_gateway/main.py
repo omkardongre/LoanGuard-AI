@@ -155,15 +155,8 @@ async def get_dashboard_summary():
             esg_average_score=72.5,  # Calculate from ESG data if needed
         )
     except Exception as e:
-        logger.warning(f"BigQuery error, using fallback: {e}")
-        return DashboardSummary(
-            total_loans=50,
-            loans_compliant=35,
-            loans_warning=10,
-            loans_breach=5,
-            active_alerts=12,
-            esg_average_score=72.5,
-        )
+        logger.error(f"Dashboard query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 # Loans endpoints
@@ -204,21 +197,8 @@ async def list_loans(
         
         return {"loans": loans, "total": total, "limit": limit, "offset": offset}
     except Exception as e:
-        logger.warning(f"BigQuery error, using fallback: {e}")
-        # Fallback mock data
-        loans = [
-            {
-                "loan_id": f"LOAN-{i:04d}",
-                "borrower_name": f"Company {chr(65 + i % 26)}",
-                "facility_amount": 100_000_000 + i * 10_000_000,
-                "currency": "USD",
-                "maturity_date": "2027-12-31",
-                "status": ["GREEN", "AMBER", "RED"][i % 3],
-                "is_sll": i % 3 == 0,
-            }
-            for i in range(limit)
-        ]
-        return {"loans": loans, "total": 50, "limit": limit, "offset": offset}
+        logger.error(f"Loans query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 @app.get("/api/loans/{loan_id}")
@@ -246,19 +226,8 @@ async def get_loan(loan_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"BigQuery error, using fallback: {e}")
-        return {
-            "loan_id": loan_id,
-            "borrower_name": "Acme Corporation",
-            "facility_amount": 150_000_000,
-            "currency": "USD",
-            "maturity_date": "2027-12-31",
-            "loan_type": "Term Loan",
-            "is_sll": True,
-            "agent_bank": "JPMorgan Chase",
-            "covenant_count": 5,
-            "overall_status": "AMBER",
-        }
+        logger.error(f"Loan detail query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 # Document endpoints
@@ -354,33 +323,8 @@ async def get_covenant_status(loan_id: str):
             },
         )
     except Exception as e:
-        logger.warning(f"BigQuery error, using fallback: {e}")
-        return CovenantStatusResponse(
-            loan_id=loan_id,
-            overall_status="AMBER",
-            covenants=[
-                {
-                    "covenant_id": "COV-001",
-                    "name": "Debt/EBITDA",
-                    "threshold": 4.0,
-                    "actual": 3.8,
-                    "status": "GREEN",
-                    "buffer_pct": 5.0,
-                },
-                {
-                    "covenant_id": "COV-002",
-                    "name": "Interest Coverage",
-                    "threshold": 2.5,
-                    "actual": 2.6,
-                    "status": "AMBER",
-                    "buffer_pct": 4.0,
-                },
-            ],
-            breach_predictions={
-                "90_day_probability": 0.25,
-                "top_risk_factors": ["Declining EBITDA", "Rising debt levels"],
-            },
-        )
+        logger.error(f"Covenant query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 @app.post("/api/covenants/{loan_id}/check")
@@ -394,32 +338,224 @@ async def run_covenant_check(loan_id: str, background_tasks: BackgroundTasks):
 @app.get("/api/esg/{loan_id}", response_model=ESGStatusResponse)
 async def get_esg_status(loan_id: str):
     """Get ESG compliance status for a loan."""
-    return ESGStatusResponse(
-        loan_id=loan_id,
-        overall_status="ON_TRACK",
-        kpis=[
-            {
-                "kpi_id": "KPI-001",
-                "name": "Carbon Emissions",
-                "baseline": 100000,
-                "target": 70000,
-                "current": 82000,
-                "progress_pct": 60,
-                "status": "ON_TRACK",
-            },
-            {
-                "kpi_id": "KPI-002",
-                "name": "Renewable Energy %",
-                "baseline": 20,
-                "target": 50,
-                "current": 38,
-                "progress_pct": 60,
-                "status": "ON_TRACK",
-            },
-        ],
-        greenwashing_risk="LOW",
-        spt_achieved=True,
-    )
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        # Get KPIs
+        kpi_query = f"""
+            SELECT 
+                kpi_id, kpi_name as name, baseline_value as baseline,
+                target_value as target, current_value as current,
+                progress_percent as progress_pct, status
+            FROM `{bq.project_id}.{bq.dataset_id}.esg_kpis`
+            WHERE loan_id = '{loan_id}'
+        """
+        kpis = bq.execute_query(kpi_query)
+        
+        # Determine overall status
+        statuses = [k.get("status", "ON_TRACK") for k in kpis]
+        if "BEHIND" in statuses or "OFF_TRACK" in statuses:
+            overall_status = "AT_RISK"
+        elif all(s == "ACHIEVED" for s in statuses):
+            overall_status = "ACHIEVED"
+        else:
+            overall_status = "ON_TRACK"
+        
+        return ESGStatusResponse(
+            loan_id=loan_id,
+            overall_status=overall_status,
+            kpis=kpis,
+            greenwashing_risk="LOW",
+            spt_achieved=overall_status == "ACHIEVED",
+        )
+    except Exception as e:
+        logger.error(f"ESG query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
+
+
+@app.get("/api/esg/loans/{loan_id}/kpis")
+async def get_esg_kpis(loan_id: str):
+    """Get ESG KPIs for a loan."""
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        query = f"""
+            SELECT 
+                kpi_id, kpi_name as name, baseline_value as baseline,
+                target_value as target, current_value as current,
+                progress_percent as progress_pct, status, unit
+            FROM `{bq.project_id}.{bq.dataset_id}.esg_kpis`
+            WHERE loan_id = '{loan_id}'
+        """
+        kpis = bq.execute_query(query)
+        return {"loan_id": loan_id, "kpis": kpis}
+    except Exception as e:
+        logger.error(f"ESG KPIs query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
+
+
+@app.get("/api/esg/loans/{loan_id}/spts")
+async def get_esg_spts(loan_id: str):
+    """Get Sustainability Performance Targets for a loan."""
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        query = f"""
+            SELECT 
+                spt_id, spt_name as name, target_value, actual_value,
+                achieved, variance_percent as variance_pct, margin_adjustment_bps
+            FROM `{bq.project_id}.{bq.dataset_id}.spts`
+            WHERE loan_id = '{loan_id}'
+        """
+        spts = bq.execute_query(query)
+        
+        achieved_count = sum(1 for s in spts if s.get("achieved"))
+        total_margin_adjustment = sum(s.get("margin_adjustment_bps", 0) for s in spts if s.get("achieved"))
+        
+        return {
+            "loan_id": loan_id,
+            "spts": spts,
+            "total_spts": len(spts),
+            "achieved_count": achieved_count,
+            "total_margin_adjustment_bps": total_margin_adjustment,
+        }
+    except Exception as e:
+        logger.error(f"SPTs query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
+
+
+@app.get("/api/portfolio/concentration")
+async def get_portfolio_concentration():
+    """Get portfolio concentration analysis."""
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        # Get industry concentration
+        query = f"""
+            SELECT 
+                borrower_industry as category,
+                borrower_industry as value,
+                SUM(facility_amount) as exposure,
+                COUNT(*) as loan_count
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            WHERE borrower_industry IS NOT NULL
+            GROUP BY borrower_industry
+            ORDER BY exposure DESC
+        """
+        concentrations = bq.execute_query(query)
+        
+        total_exposure = sum(c.get("exposure", 0) for c in concentrations)
+        
+        # Calculate HHI and percentages
+        for c in concentrations:
+            c["percentage"] = (c.get("exposure", 0) / total_exposure * 100) if total_exposure > 0 else 0
+        
+        # Calculate HHI (Herfindahl-Hirschman Index)
+        hhi = sum((c.get("percentage", 0) ** 2) for c in concentrations)
+        
+        if hhi > 2500:
+            concentration_level = "HIGH"
+        elif hhi > 1500:
+            concentration_level = "MODERATE"
+        else:
+            concentration_level = "LOW"
+        
+        return {
+            "total_loans": sum(c.get("loan_count", 0) for c in concentrations),
+            "total_exposure": total_exposure,
+            "hhi_index": hhi,
+            "concentration_level": concentration_level,
+            "top_exposures": concentrations[:10],
+        }
+    except Exception as e:
+        logger.error(f"Concentration query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
+
+
+@app.post("/api/carbon/calculate")
+async def calculate_carbon_emissions(
+    loan_id: str,
+    electricity_kwh: float = 0,
+    fuel_liters: float = 0,
+    travel_km: float = 0,
+):
+    """Calculate carbon emissions using Climatiq API."""
+    try:
+        import os
+        import httpx
+        
+        climatiq_api_key = os.getenv("CLIMATIQ_API_KEY")
+        if not climatiq_api_key:
+            raise HTTPException(status_code=400, detail="CLIMATIQ_API_KEY not configured")
+        
+        total_co2e_kg = 0.0
+        breakdown = {}
+        
+        async with httpx.AsyncClient() as client:
+            headers = {"Authorization": f"Bearer {climatiq_api_key}"}
+            base_url = "https://api.climatiq.io/data/v1/estimate"
+            
+            # Electricity
+            if electricity_kwh > 0:
+                resp = await client.post(
+                    base_url,
+                    headers=headers,
+                    json={
+                        "emission_factor": {"activity_id": "electricity-supply_grid-source_supplier_mix", "region": "US"},
+                        "parameters": {"energy": electricity_kwh, "energy_unit": "kWh"},
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    breakdown["electricity"] = data.get("co2e", 0)
+                    total_co2e_kg += breakdown["electricity"]
+            
+            # Fuel
+            if fuel_liters > 0:
+                resp = await client.post(
+                    base_url,
+                    headers=headers,
+                    json={
+                        "emission_factor": {"activity_id": "fuel-type_diesel", "region": "US"},
+                        "parameters": {"volume": fuel_liters, "volume_unit": "l"},
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    breakdown["fuel"] = data.get("co2e", 0)
+                    total_co2e_kg += breakdown["fuel"]
+            
+            # Travel
+            if travel_km > 0:
+                resp = await client.post(
+                    base_url,
+                    headers=headers,
+                    json={
+                        "emission_factor": {"activity_id": "passenger_vehicle-vehicle_type_car-fuel_source_na-engine_size_na-vehicle_age_na-vehicle_weight_na"},
+                        "parameters": {"distance": travel_km, "distance_unit": "km"},
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    breakdown["travel"] = data.get("co2e", 0)
+                    total_co2e_kg += breakdown["travel"]
+        
+        return {
+            "loan_id": loan_id,
+            "total_co2e_kg": total_co2e_kg,
+            "total_co2e_tonnes": total_co2e_kg / 1000,
+            "breakdown": breakdown,
+            "calculated_at": datetime.now().isoformat(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Carbon calculation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Alert endpoints
@@ -459,28 +595,8 @@ async def list_alerts(
         alerts = bq.execute_query(query)
         return AlertResponse(alerts=alerts, total_count=len(alerts))
     except Exception as e:
-        logger.warning(f"BigQuery error, using fallback: {e}")
-        alerts = [
-            {
-                "alert_id": "ALT-001",
-                "loan_id": "LOAN-0001",
-                "type": "covenant_warning",
-                "severity": "MEDIUM",
-                "message": "Interest Coverage approaching threshold",
-                "created_at": datetime.now().isoformat(),
-                "acknowledged": False,
-            },
-            {
-                "alert_id": "ALT-002",
-                "loan_id": "LOAN-0003",
-                "type": "covenant_breach",
-                "severity": "HIGH",
-                "message": "Debt/EBITDA covenant breached",
-                "created_at": datetime.now().isoformat(),
-                "acknowledged": False,
-            },
-        ]
-        return AlertResponse(alerts=alerts, total_count=len(alerts))
+        logger.error(f"Alerts query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 @app.post("/api/alerts/{alert_id}/acknowledge")
@@ -490,18 +606,63 @@ async def acknowledge_alert(alert_id: str):
 
 
 # Chat endpoint for agent interaction
+class ChatRequest(BaseModel):
+    message: str
+    loan_id: Optional[str] = None
+
+
 @app.post("/api/chat")
-async def chat_with_agent(message: str, loan_id: Optional[str] = None):
-    """Chat with LoanGuard AI agent."""
-    # In production, route to appropriate service
-    return {
-        "response": f"I understand you're asking about {loan_id or 'your loans'}. How can I help with covenant or ESG compliance?",
-        "suggestions": [
-            "Show me loans at risk of breach",
-            "Generate compliance report",
-            "Check ESG status for LOAN-0001",
-        ],
-    }
+async def chat_with_agent(request: ChatRequest):
+    """Chat with LoanGuard AI agent powered by Gemini."""
+    try:
+        import os
+        import google.generativeai as genai
+        
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # Build context
+        system_prompt = """You are LoanGuard AI, an expert assistant for loan covenant and ESG compliance monitoring.
+You help loan portfolio managers with:
+- Covenant compliance monitoring and breach prediction
+- ESG and sustainability-linked loan (SLL) tracking  
+- Greenwashing detection and risk assessment
+- Risk velocity analysis and cure options
+
+Be concise, professional, and actionable. When discussing specific loans, always reference the loan_id."""
+        
+        user_context = request.message
+        if request.loan_id:
+            user_context = f"[Context: Loan {request.loan_id}]\n\n{request.message}"
+        
+        response = model.generate_content(
+            [system_prompt, user_context],
+            generation_config={
+                "temperature": 0.7,
+                "max_output_tokens": 1024,
+            },
+        )
+        
+        return {
+            "response": response.text,
+            "suggestions": [
+                "Show me loans at risk of breach",
+                "What is the ESG status?",
+                "Calculate cure options",
+            ],
+        }
+    except Exception as e:
+        logger.error(f"Chat failed: {e}")
+        # Fallback to simple response if Gemini unavailable
+        return {
+            "response": f"I'm your LoanGuard AI assistant. I can help with covenant monitoring, ESG compliance, and risk analysis. How can I assist with {request.loan_id or 'your portfolio'}?",
+            "suggestions": [
+                "Show me loans at risk of breach",
+                "Generate compliance report",
+                "Check ESG status",
+            ],
+        }
+
 
 
 # =============================================================================
@@ -577,19 +738,76 @@ async def get_loan_velocity(loan_id: str, metric: str = "debt_to_ebitda"):
     Shows WHERE the loan is GOING, not just where it is.
     This is a UNIQUE feature - trajectory-based early warning.
     """
-    # Mock data - in production, calculate from historical BigQuery data
-    return RiskVelocityResponse(
-        loan_id=loan_id,
-        metric_name=metric,
-        current_value=3.8,
-        threshold=4.0,
-        headroom_percent=5.0,
-        velocity={"current": 0.15, "average": 0.12, "unit": "per_quarter"},
-        trajectory="WORSENING",
-        periods_to_breach=1.3,
-        risk_level="HIGH",
-        summary="⚠️ WARNING: Breach possible in 1.3 quarters if trend continues.",
-    )
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        # Get historical measurements for velocity calculation
+        query = f"""
+            SELECT 
+                m.actual_value, m.period_date, c.threshold
+            FROM `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m
+            JOIN `{bq.project_id}.{bq.dataset_id}.covenants` c ON m.covenant_id = c.covenant_id
+            WHERE c.loan_id = '{loan_id}' AND c.covenant_type = '{metric}'
+            ORDER BY m.period_date DESC
+            LIMIT 8
+        """
+        measurements = bq.execute_query(query)
+        
+        if not measurements:
+            raise HTTPException(status_code=404, detail=f"No measurements found for {loan_id}")
+        
+        current = measurements[0].get("actual_value", 0)
+        threshold = measurements[0].get("threshold", 4.0)
+        
+        # Calculate velocity (rate of change per quarter)
+        if len(measurements) >= 2:
+            prev = measurements[1].get("actual_value", current)
+            velocity_current = current - prev
+            velocity_avg = (current - measurements[-1].get("actual_value", current)) / len(measurements)
+        else:
+            velocity_current = 0
+            velocity_avg = 0
+        
+        headroom = ((threshold - current) / threshold) * 100 if threshold != 0 else 0
+        
+        # Determine trajectory and risk
+        if velocity_current > 0.1:
+            trajectory = "WORSENING"
+            periods_to_breach = (threshold - current) / velocity_current if velocity_current > 0 else None
+        elif velocity_current < -0.1:
+            trajectory = "IMPROVING"
+            periods_to_breach = None
+        else:
+            trajectory = "STABLE"
+            periods_to_breach = None
+        
+        if headroom < 5 or (periods_to_breach and periods_to_breach < 2):
+            risk_level = "CRITICAL"
+        elif headroom < 15 or (periods_to_breach and periods_to_breach < 4):
+            risk_level = "HIGH"
+        elif headroom < 25:
+            risk_level = "MEDIUM"
+        else:
+            risk_level = "LOW"
+        
+        return RiskVelocityResponse(
+            loan_id=loan_id,
+            metric_name=metric,
+            current_value=current,
+            threshold=threshold,
+            headroom_percent=headroom,
+            velocity={"current": velocity_current, "average": velocity_avg, "unit": "per_quarter"},
+            trajectory=trajectory,
+            periods_to_breach=periods_to_breach,
+            risk_level=risk_level,
+            summary=f"{'⚠️ WARNING: Breach possible in ' + str(round(periods_to_breach, 1)) + ' quarters' if periods_to_breach and periods_to_breach < 4 else '✅ Trajectory stable'}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Velocity query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 @app.post("/api/loans/{loan_id}/velocity/calculate")
@@ -613,22 +831,52 @@ async def calculate_velocity(loan_id: str, request: RiskVelocityRequest):
 @app.get("/api/portfolio/velocity")
 async def get_portfolio_velocity():
     """Get velocity analysis across entire portfolio."""
-    # Mock data - in production, aggregate from all loans
-    return {
-        "total_loans_analyzed": 50,
-        "risk_distribution": {
-            "CRITICAL": 2,
-            "HIGH": 5,
-            "MEDIUM": 12,
-            "LOW": 31,
-        },
-        "worsening_loans": [
-            {"loan_id": "LOAN-0003", "risk_level": "CRITICAL", "nearest_breach": 0.8},
-            {"loan_id": "LOAN-0012", "risk_level": "HIGH", "nearest_breach": 1.5},
-            {"loan_id": "LOAN-0025", "risk_level": "HIGH", "nearest_breach": 2.1},
-        ],
-        "summary": "7 loans require immediate attention",
-    }
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        # Get risk distribution from loans
+        query = f"""
+            SELECT 
+                CASE 
+                    WHEN status = 'RED' THEN 'CRITICAL'
+                    WHEN status = 'AMBER' THEN 'HIGH'
+                    ELSE 'LOW'
+                END as risk_level,
+                COUNT(*) as count
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            GROUP BY risk_level
+        """
+        results = bq.execute_query(query)
+        
+        distribution = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+        for r in results:
+            distribution[r.get("risk_level", "LOW")] = r.get("count", 0)
+        
+        total = sum(distribution.values())
+        
+        # Get worsening loans
+        worsening_query = f"""
+            SELECT loan_id, status
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            WHERE status IN ('RED', 'AMBER')
+            LIMIT 5
+        """
+        worsening = bq.execute_query(worsening_query)
+        worsening_loans = [
+            {"loan_id": w.get("loan_id"), "risk_level": "CRITICAL" if w.get("status") == "RED" else "HIGH", "nearest_breach": 1.5}
+            for w in worsening
+        ]
+        
+        return {
+            "total_loans_analyzed": total,
+            "risk_distribution": distribution,
+            "worsening_loans": worsening_loans,
+            "summary": f"{distribution['CRITICAL'] + distribution['HIGH']} loans require immediate attention",
+        }
+    except Exception as e:
+        logger.error(f"Portfolio velocity query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 # Greenwashing Detection Endpoints (V6 P0 - HERO FEATURE)
@@ -661,34 +909,63 @@ async def detect_greenwashing(request: GreenwashingRequest):
 @app.get("/api/loans/{loan_id}/greenwashing")
 async def get_loan_greenwashing(loan_id: str):
     """Get greenwashing analysis for a specific loan."""
-    # Mock data - in production, fetch from database
-    return {
-        "loan_id": loan_id,
-        "borrower": "Acme Corporation",
-        "analysis_date": datetime.now().isoformat(),
-        "overall_risk": "MEDIUM",
-        "overall_score": 0.65,
-        "claims_analyzed": 3,
-        "results": [
-            {
-                "claim": "Carbon neutral by 2030",
-                "verdict": "QUESTIONABLE",
-                "risk_level": "MEDIUM",
-                "flags": ["NO_THIRD_PARTY_VERIFICATION"],
-            },
-            {
-                "claim": "100% renewable energy by 2028",
-                "verdict": "VERIFIED",
-                "risk_level": "LOW",
-                "flags": [],
-            },
-        ],
-        "recommendation": "Request supporting documentation for carbon neutrality claim.",
-        "regulatory_context": {
-            "dws_fine": "€25M for ESG greenwashing (2025)",
-            "cma_enforcement": "Starting Autumn 2025",
-        },
-    }
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        # Get loan and borrower info
+        loan_query = f"""
+            SELECT borrower_name, borrower_industry
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            WHERE loan_id = '{loan_id}'
+        """
+        loan_results = bq.execute_query(loan_query)
+        if not loan_results:
+            raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+        
+        borrower = loan_results[0].get("borrower_name", "Unknown")
+        
+        # Get greenwashing analysis if stored
+        analysis_query = f"""
+            SELECT 
+                overall_risk, overall_score, claims_analyzed,
+                results, recommendation, analysis_date
+            FROM `{bq.project_id}.{bq.dataset_id}.greenwashing_analyses`
+            WHERE loan_id = '{loan_id}'
+            ORDER BY analysis_date DESC
+            LIMIT 1
+        """
+        analyses = bq.execute_query(analysis_query)
+        
+        if analyses:
+            analysis = analyses[0]
+            return {
+                "loan_id": loan_id,
+                "borrower": borrower,
+                "analysis_date": analysis.get("analysis_date"),
+                "overall_risk": analysis.get("overall_risk", "UNKNOWN"),
+                "overall_score": analysis.get("overall_score", 0),
+                "claims_analyzed": analysis.get("claims_analyzed", 0),
+                "results": analysis.get("results", []),
+                "recommendation": analysis.get("recommendation", "No analysis available"),
+            }
+        else:
+            # No analysis exists - return status indicating analysis needed
+            return {
+                "loan_id": loan_id,
+                "borrower": borrower,
+                "analysis_date": None,
+                "overall_risk": "NOT_ANALYZED",
+                "overall_score": 0,
+                "claims_analyzed": 0,
+                "results": [],
+                "recommendation": "Run greenwashing detection analysis for this loan.",
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Greenwashing query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 # Cure Calculator Endpoints (V6 P2)
@@ -730,27 +1007,52 @@ async def calculate_cure(loan_id: str, request: CureCalculatorRequest):
 @app.get("/api/loans/{loan_id}/cure")
 async def get_loan_cure_options(loan_id: str):
     """Get pre-calculated cure options for a loan's at-risk covenants."""
-    # Mock data - in production, calculate for all at-risk covenants
-    return {
-        "loan_id": loan_id,
-        "at_risk_covenants": 1,
-        "cure_analyses": [
-            {
-                "covenant_type": "debt_to_ebitda",
-                "current_value": 4.2,
-                "threshold": 4.0,
-                "is_breached": True,
-                "cure_deadline_days": 30,
-                "recommended": {
-                    "method": "EQUITY_CURE",
-                    "amount": 15_000_000,
-                    "description": "Inject $15,000,000 equity (sponsor contribution)",
-                    "feasibility": "MEDIUM",
-                },
-                "options_count": 4,
-            },
-        ],
-    }
+    try:
+        from common.bigquery_client import BigQueryClient
+        from covenant_service.covenant_service.tools.cure_calculator_tools import calculate_cure_options
+        bq = BigQueryClient()
+        
+        # Get at-risk covenants for this loan
+        query = f"""
+            SELECT 
+                c.covenant_id, c.covenant_type, c.threshold,
+                m.actual_value as current_value, m.status
+            FROM `{bq.project_id}.{bq.dataset_id}.covenants` c
+            JOIN (
+                SELECT covenant_id, actual_value, status,
+                    ROW_NUMBER() OVER(PARTITION BY covenant_id ORDER BY period_date DESC) as rn
+                FROM `{bq.project_id}.{bq.dataset_id}.covenant_measurements`
+            ) m ON c.covenant_id = m.covenant_id AND m.rn = 1
+            WHERE c.loan_id = '{loan_id}' AND m.status IN ('RED', 'AMBER')
+        """
+        at_risk = bq.execute_query(query)
+        
+        cure_analyses = []
+        for cov in at_risk:
+            cure_result = calculate_cure_options(
+                loan_id=loan_id,
+                covenant_type=cov.get("covenant_type", "debt_to_ebitda"),
+                current_value=float(cov.get("current_value", 0)),
+                threshold=float(cov.get("threshold", 4.0)),
+            )
+            cure_analyses.append({
+                "covenant_type": cov.get("covenant_type"),
+                "current_value": cov.get("current_value"),
+                "threshold": cov.get("threshold"),
+                "is_breached": cov.get("status") == "RED",
+                "cure_deadline_days": cure_result.get("cure_deadline_days", 30),
+                "recommended": cure_result.get("recommended"),
+                "options_count": cure_result.get("options_count", 0),
+            })
+        
+        return {
+            "loan_id": loan_id,
+            "at_risk_covenants": len(at_risk),
+            "cure_analyses": cure_analyses,
+        }
+    except Exception as e:
+        logger.error(f"Cure options query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 # ML Predictions Endpoints (V6 P1)

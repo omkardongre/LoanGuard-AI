@@ -114,6 +114,12 @@ models/*.csv
 
 # SHAP explainers (can be regenerated)
 models/*_explainer.pkl
+models/*_explainer_info.json
+
+# Model config and metrics (can be regenerated)
+models/*_config.json
+models/*_metrics.json
+models/*_feature_importance.json
 
 # Training data (large files)
 data/

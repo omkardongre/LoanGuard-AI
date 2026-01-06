@@ -59,6 +59,7 @@ import {
   type LGDPrediction,
 } from "@/lib/api";
 import { LGDCard } from "@/components/lgd-card";
+import { PrepaymentCard } from "@/components/prepayment-card";
 
 function formatCurrency(amount: number, currency: string = "USD") {
   return new Intl.NumberFormat("en-US", {
@@ -341,6 +342,7 @@ export default function LoanDetailPage() {
             <TabsTrigger value="covenants">Covenants</TabsTrigger>
             <TabsTrigger value="predictions">ML Predictions</TabsTrigger>
             <TabsTrigger value="lgd">LGD Analysis</TabsTrigger>
+            <TabsTrigger value="prepayment">Prepayment Risk</TabsTrigger>
             <TabsTrigger value="velocity">Risk Velocity</TabsTrigger>
             <TabsTrigger value="cure">Cure Calculator</TabsTrigger>
             {loan.is_sll && <TabsTrigger value="esg">ESG</TabsTrigger>}
@@ -715,6 +717,13 @@ export default function LoanDetailPage() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          </TabsContent>
+
+          {/* Prepayment Risk Tab - V9 NEW */}
+          <TabsContent value="prepayment" className="mt-6">
+            <div className="grid grid-cols-1 gap-6">
+              <PrepaymentCard loanId={loanId} />
             </div>
           </TabsContent>
 

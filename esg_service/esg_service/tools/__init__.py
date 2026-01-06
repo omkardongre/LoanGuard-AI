@@ -35,6 +35,20 @@ from esg_service.esg_service.tools.greenwashing_search_tools import (
     GreenwashingRisk,
     ClaimVerdict,
 )
+from esg_service.esg_service.tools.carbon_tools import (
+    CarbonEmissionsTracker,
+    get_carbon_tracker,
+    calculate_carbon_emissions,
+    calculate_loan_carbon_footprint,
+    EmissionScope,
+)
+from esg_service.esg_service.tools.news_tools import (
+    NewsValidator,
+    get_news_validator,
+    validate_company_claim,
+    get_company_controversies,
+    ClaimCredibility,
+)
 
 __all__ = [
     # KPI tools
@@ -65,5 +79,16 @@ __all__ = [
     "analyze_greenwashing",
     "GreenwashingRisk",
     "ClaimVerdict",
+    # Carbon Tracking (P2)
+    "CarbonEmissionsTracker",
+    "get_carbon_tracker",
+    "calculate_carbon_emissions",
+    "calculate_loan_carbon_footprint",
+    "EmissionScope",
+    # News API Validation (P2)
+    "NewsValidator",
+    "get_news_validator",
+    "validate_company_claim",
+    "get_company_controversies",
+    "ClaimCredibility",
 ]
-

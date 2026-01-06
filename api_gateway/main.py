@@ -1280,6 +1280,162 @@ async def generate_portfolio_pdf_report():
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 
+# =============================================================================
+# V9 NEW ENDPOINTS - Recovery Rate / LGD for Basel III Compliance
+# =============================================================================
+
+class LGDRequest(BaseModel):
+    """Request model for LGD calculation."""
+    loan_amnt: float
+    int_rate: float
+    grade: str = "C"
+    annual_inc: float = 75000
+    dti: float = 18.0
+    fico_range_low: float = 690
+    home_ownership: str = "MORTGAGE"
+    purpose: str = "debt_consolidation"
+    term: str = "36 months"
+
+
+class LGDResponse(BaseModel):
+    """Response model for LGD prediction."""
+    loan_id: str
+    recovery_rate: float
+    recovery_rate_pct: str
+    lgd: float
+    lgd_pct: str
+    recovery_category: str
+    model_version: str
+    success: bool
+
+
+@app.get("/api/loans/{loan_id}/lgd", response_model=LGDResponse, tags=["V9 - Basel III"])
+async def get_loan_lgd(loan_id: str):
+    """
+    Get Loss Given Default (LGD) prediction for a loan.
+    
+    V9 NEW - Basel III capital adequacy calculations.
+    LGD = 1 - Recovery Rate
+    ECL = PD × LGD × EAD
+    
+    Returns recovery rate and LGD for the loan based on its characteristics.
+    """
+    try:
+        from covenant_service.covenant_service.tools.lgd_predictor import predict_lgd
+        
+        # Get loan data from database
+        from common.firebase_client import get_sync_client
+        client = get_sync_client()
+        
+        loan_data = {}
+        if client:
+            result = client.table("loans").select("*").eq("loan_id", loan_id).limit(1).maybe_single().execute()
+            if result.data:
+                loan_data = result.data
+        
+        # Use defaults if loan not found
+        if not loan_data:
+            loan_data = {
+                "loan_amnt": 15000,
+                "int_rate": 13.5,
+                "grade": "C",
+                "annual_inc": 75000,
+                "dti": 18.0,
+            }
+        
+        result = predict_lgd(loan_id, loan_data)
+        
+        return LGDResponse(
+            loan_id=loan_id,
+            recovery_rate=result.get("final_recovery_rate", 0.11),
+            recovery_rate_pct=f"{result.get('final_recovery_rate', 0.11):.1%}",
+            lgd=result.get("lgd", 0.89),
+            lgd_pct=result.get("lgd_pct", "89.0%"),
+            recovery_category=result.get("recovery_category", "LOW_RECOVERY"),
+            model_version=result.get("model_version", "2.0.0-two-stage"),
+            success=result.get("success", True),
+        )
+        
+    except Exception as e:
+        logger.error(f"LGD prediction failed for {loan_id}: {e}")
+        return LGDResponse(
+            loan_id=loan_id,
+            recovery_rate=0.11,
+            recovery_rate_pct="11.0%",
+            lgd=0.89,
+            lgd_pct="89.0%",
+            recovery_category="UNKNOWN",
+            model_version="2.0.0-two-stage",
+            success=False,
+        )
+
+
+@app.post("/api/loans/{loan_id}/lgd/predict", tags=["V9 - Basel III"])
+async def predict_loan_lgd(loan_id: str, request: LGDRequest):
+    """
+    Predict LGD with custom loan parameters.
+    
+    V9 NEW - Supports what-if analysis for recovery scenarios.
+    """
+    try:
+        from covenant_service.covenant_service.tools.lgd_predictor import predict_lgd
+        
+        loan_data = request.model_dump()
+        result = predict_lgd(loan_id, loan_data)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"LGD prediction failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/loans/{loan_id}/lgd/explain", tags=["V9 - Basel III"])
+async def explain_loan_lgd(loan_id: str, top_n: int = 5):
+    """
+    Get SHAP explanation for LGD prediction.
+    
+    V9 NEW - Explainable AI for Basel III audits.
+    """
+    try:
+        from covenant_service.covenant_service.tools.lgd_predictor import explain_lgd
+        from common.firebase_client import get_sync_client
+        
+        client = get_sync_client()
+        loan_data = {}
+        if client:
+            result = client.table("loans").select("*").eq("loan_id", loan_id).limit(1).maybe_single().execute()
+            if result.data:
+                loan_data = result.data
+        
+        if not loan_data:
+            loan_data = {"loan_amnt": 15000, "int_rate": 13.5}
+        
+        result = explain_lgd(loan_id, loan_data, top_n)
+        return result
+        
+    except Exception as e:
+        logger.error(f"LGD explanation failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/ml/recovery-rate/importance", tags=["V9 - Basel III"])
+async def get_recovery_feature_importance_endpoint():
+    """
+    Get global feature importance for Recovery Rate model.
+    
+    V9 NEW - Model governance and audit trail.
+    """
+    try:
+        from covenant_service.covenant_service.tools.lgd_predictor import get_lgd_model_info
+        
+        return get_lgd_model_info()
+        
+    except Exception as e:
+        logger.error(f"Feature importance retrieval failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)

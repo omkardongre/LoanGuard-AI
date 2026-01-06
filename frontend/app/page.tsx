@@ -37,6 +37,8 @@ import {
   fetchAlerts,
   fetchPortfolioVelocity,
   fetchPortfolioConcentration,
+  downloadPortfolioPdfReport,
+  triggerPdfDownload,
   type DashboardSummary,
   type Loan,
   type Alert,
@@ -71,6 +73,7 @@ export default function Home() {
   const [concentration, setConcentration] = useState<PortfolioConcentration | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   async function loadData() {
     try {
@@ -151,10 +154,30 @@ export default function Home() {
               Monitor your loan portfolio compliance
             </p>
           </div>
-          <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                setPdfLoading(true);
+                try {
+                  const blob = await downloadPortfolioPdfReport();
+                  triggerPdfDownload(blob, "portfolio_compliance_report.pdf");
+                } catch (err) {
+                  console.error("PDF download failed:", err);
+                } finally {
+                  setPdfLoading(false);
+                }
+              }}
+              disabled={pdfLoading}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              {pdfLoading ? "Generating..." : "Download Report"}
+            </Button>
+            <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Stats Grid */}

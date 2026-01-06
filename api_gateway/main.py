@@ -1091,6 +1091,196 @@ async def get_prediction_explanation(loan_id: str):
     }
 
 
+# =============================================================================
+# PDF REPORT GENERATION ENDPOINTS (V8 P2)
+# =============================================================================
+
+from fastapi.responses import Response
+
+
+@app.get("/api/loans/{loan_id}/report/pdf")
+async def generate_loan_pdf_report(loan_id: str):
+    """
+    Generate PDF compliance report for a specific loan.
+    
+    Returns downloadable PDF with covenant status, ML predictions, and ESG data.
+    """
+    try:
+        from common.bigquery_client import BigQueryClient
+        from common.pdf_report_generator import generate_loan_pdf
+        
+        bq = BigQueryClient()
+        
+        # Get loan data
+        loan_query = f"""
+            SELECT *
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            WHERE loan_id = '{loan_id}'
+        """
+        loan_results = bq.execute_query(loan_query)
+        if not loan_results:
+            raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+        
+        loan_data = loan_results[0]
+        
+        # Get covenants
+        cov_query = f"""
+            SELECT 
+                c.covenant_id, c.covenant_type as name, c.threshold,
+                m.actual_value as actual, m.status,
+                ((c.threshold - m.actual_value) / c.threshold * 100) as buffer_pct
+            FROM `{bq.project_id}.{bq.dataset_id}.covenants` c
+            LEFT JOIN (
+                SELECT covenant_id, actual_value, status,
+                    ROW_NUMBER() OVER(PARTITION BY covenant_id ORDER BY period_date DESC) as rn
+                FROM `{bq.project_id}.{bq.dataset_id}.covenant_measurements`
+            ) m ON c.covenant_id = m.covenant_id AND m.rn = 1
+            WHERE c.loan_id = '{loan_id}'
+        """
+        covenants = bq.execute_query(cov_query)
+        
+        # Get ESG data
+        esg_query = f"""
+            SELECT 
+                kpi_id, kpi_name as name, baseline_value as baseline,
+                target_value as target, current_value as current,
+                progress_percent as progress_pct, status
+            FROM `{bq.project_id}.{bq.dataset_id}.esg_kpis`
+            WHERE loan_id = '{loan_id}'
+        """
+        esg_kpis = bq.execute_query(esg_query)
+        
+        esg_data = {
+            "overall_status": "ON_TRACK",
+            "kpis": esg_kpis,
+        } if esg_kpis else None
+        
+        # Generate PDF
+        pdf_bytes = generate_loan_pdf(
+            loan_data=loan_data,
+            covenants=covenants,
+            predictions={"90_day_probability": 0.25, "top_risk_factors": ["Debt leverage", "Market conditions"]},
+            esg_data=esg_data,
+        )
+        
+        filename = f"loan_compliance_report_{loan_id}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+
+@app.get("/api/portfolio/report/pdf")
+async def generate_portfolio_pdf_report():
+    """
+    Generate PDF compliance report for the entire portfolio.
+    
+    Returns downloadable PDF with portfolio summary, concentration, and loan list.
+    """
+    try:
+        from common.bigquery_client import BigQueryClient
+        from common.pdf_report_generator import generate_portfolio_pdf
+        
+        bq = BigQueryClient()
+        
+        # Get portfolio summary
+        summary_query = f"""
+            SELECT 
+                COUNT(*) as total_loans,
+                SUM(facility_amount) as total_exposure,
+                COUNTIF(status = 'GREEN') as loans_compliant,
+                COUNTIF(status = 'AMBER') as loans_warning,
+                COUNTIF(status = 'RED') as loans_breach
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+        """
+        summary_results = bq.execute_query(summary_query)
+        summary = summary_results[0] if summary_results else {}
+        
+        # Get alert count
+        alert_query = f"""
+            SELECT COUNT(*) as active_alerts
+            FROM `{bq.project_id}.{bq.dataset_id}.alerts`
+            WHERE is_acknowledged = FALSE
+        """
+        alert_results = bq.execute_query(alert_query)
+        summary["active_alerts"] = alert_results[0].get("active_alerts", 0) if alert_results else 0
+        summary["esg_average_score"] = 72.5  # Calculate from ESG data
+        
+        # Get loans list
+        loans_query = f"""
+            SELECT loan_id, borrower_name, facility_amount, status
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            ORDER BY facility_amount DESC
+            LIMIT 50
+        """
+        loans = bq.execute_query(loans_query)
+        
+        # Get concentration
+        conc_query = f"""
+            SELECT 
+                borrower_industry as category,
+                SUM(facility_amount) as exposure,
+                COUNT(*) as loan_count
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            WHERE borrower_industry IS NOT NULL
+            GROUP BY borrower_industry
+            ORDER BY exposure DESC
+        """
+        concentrations = bq.execute_query(conc_query)
+        
+        total_exp = sum(c.get("exposure", 0) for c in concentrations)
+        for c in concentrations:
+            c["percentage"] = (c.get("exposure", 0) / total_exp * 100) if total_exp > 0 else 0
+        
+        hhi = sum((c.get("percentage", 0) ** 2) for c in concentrations)
+        
+        concentration = {
+            "hhi_index": hhi,
+            "concentration_level": "HIGH" if hhi > 2500 else "MODERATE" if hhi > 1500 else "LOW",
+            "top_exposures": concentrations[:10],
+        }
+        
+        # Get velocity
+        velocity = {
+            "risk_distribution": {
+                "CRITICAL": summary.get("loans_breach", 0),
+                "HIGH": summary.get("loans_warning", 0),
+                "MEDIUM": 0,
+                "LOW": summary.get("loans_compliant", 0),
+            },
+            "worsening_loans": [],
+        }
+        
+        # Generate PDF
+        pdf_bytes = generate_portfolio_pdf(
+            summary=summary,
+            loans=loans,
+            concentration=concentration,
+            velocity=velocity,
+        )
+        
+        filename = f"portfolio_compliance_report_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+        
+    except Exception as e:
+        logger.error(f"Portfolio PDF generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
+

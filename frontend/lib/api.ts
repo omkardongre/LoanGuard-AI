@@ -665,6 +665,43 @@ export async function chatWithAgent(
 }
 
 // ============================================
+// PDF Report Generation
+// ============================================
+
+export async function downloadLoanPdfReport(loanId: string): Promise<Blob> {
+  const url = `${API_BASE_URL}/api/loans/${loanId}/report/pdf`;
+  const response = await fetch(url);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to generate PDF: ${response.status}`);
+  }
+  
+  return response.blob();
+}
+
+export async function downloadPortfolioPdfReport(): Promise<Blob> {
+  const url = `${API_BASE_URL}/api/portfolio/report/pdf`;
+  const response = await fetch(url);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to generate PDF: ${response.status}`);
+  }
+  
+  return response.blob();
+}
+
+export function triggerPdfDownload(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+}
+
+// ============================================
 // Health Check
 // ============================================
 
@@ -675,3 +712,4 @@ export async function checkHealth(): Promise<{
 }> {
   return apiRequest("/health");
 }
+

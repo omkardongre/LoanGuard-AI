@@ -45,6 +45,8 @@ import {
   fetchLoanVelocity,
   fetchLoanCureOptions,
   calculateCure,
+  downloadLoanPdfReport,
+  triggerPdfDownload,
   type Loan,
   type Covenant,
   type ESGKpi,
@@ -86,6 +88,7 @@ export default function LoanDetailPage() {
     ebitda: 25000000,
   });
   const [cureLoading, setCureLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
     async function loadLoanData() {
@@ -206,7 +209,26 @@ export default function LoanDetailPage() {
             <p className="text-2xl font-bold text-slate-900">
               {formatCurrency(loan.facility_amount, loan.currency)}
             </p>
-            <p className="text-sm text-slate-500">Matures: {loan.maturity_date}</p>
+            <p className="text-sm text-slate-500 mb-2">Matures: {loan.maturity_date}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pdfLoading}
+              onClick={async () => {
+                setPdfLoading(true);
+                try {
+                  const blob = await downloadLoanPdfReport(loanId);
+                  triggerPdfDownload(blob, `loan_report_${loanId}.pdf`);
+                } catch (err) {
+                  console.error("PDF download failed:", err);
+                } finally {
+                  setPdfLoading(false);
+                }
+              }}
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              {pdfLoading ? "Generating..." : "Download PDF"}
+            </Button>
           </div>
         </div>
 

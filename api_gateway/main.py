@@ -1883,6 +1883,609 @@ async def get_esg_risk_model_info():
         return {'success': False, 'error': str(e)}
 
 
+# ============================================
+# STRESS TESTING API ENDPOINTS (V9 NEW)
+# ============================================
+
+
+@app.get("/api/stress-test/scenarios")
+async def list_stress_scenarios():
+    """List all available stress testing scenarios."""
+    try:
+        from covenant_service.covenant_service.tools.stress_testing_engine import list_all_scenarios
+        
+        scenarios = list_all_scenarios()
+        return {
+            'success': True,
+            'scenarios': scenarios,
+            'total': len(scenarios),
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to list stress scenarios: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/stress-test/run")
+async def run_stress_test(request: Request):
+    """
+    Run stress test on loan portfolio.
+    
+    Body: {
+        "scenario_id": "eco_moderate",
+        "loan_ids": ["LOAN001", "LOAN002"] (optional - runs on all if omitted)
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.stress_testing_engine import get_stress_tester
+        
+        data = await request.json()
+        scenario_id = data.get('scenario_id', 'eco_moderate')
+        loan_ids = data.get('loan_ids', None)
+        
+        # Fetch loans from BigQuery
+        from common.bigquery_client import get_bigquery_client
+        bq = get_bigquery_client()
+        
+        if loan_ids:
+            placeholders = ', '.join([f"'{lid}'" for lid in loan_ids])
+            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` WHERE loan_id IN ({placeholders})"
+        else:
+            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 100"
+        
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        if not loans:
+            return {'success': False, 'error': 'No loans found'}
+        
+        # Add ML predictions to loans
+        for loan in loans:
+            loan['breach_probability'] = loan.get('breach_probability', 0.1)
+            loan['lgd'] = loan.get('lgd', 0.45)
+            loan['sector'] = loan.get('industry', 'unclassified')
+        
+        # Run stress test
+        stress_tester = get_stress_tester()
+        result = stress_tester.stress_test_portfolio(loans, scenario_id)
+        
+        return {'success': True, **result.to_dict()}
+        
+    except Exception as e:
+        logger.error(f"Stress test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/stress-test/compare")
+async def compare_stress_scenarios(request: Request):
+    """
+    Compare multiple stress scenarios side by side.
+    
+    Body: {
+        "scenario_ids": ["eco_mild", "eco_severe", "climate_disorderly"]
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.stress_testing_engine import get_stress_tester
+        from common.bigquery_client import get_bigquery_client
+        
+        data = await request.json()
+        scenario_ids = data.get('scenario_ids', ['eco_mild', 'eco_moderate', 'eco_severe'])
+        
+        # Fetch loans
+        bq = get_bigquery_client()
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 100"
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        for loan in loans:
+            loan['breach_probability'] = loan.get('breach_probability', 0.1)
+            loan['lgd'] = loan.get('lgd', 0.45)
+            loan['sector'] = loan.get('industry', 'unclassified')
+        
+        # Compare scenarios
+        stress_tester = get_stress_tester()
+        comparison = stress_tester.compare_scenarios(loans, scenario_ids)
+        
+        return {'success': True, **comparison}
+        
+    except Exception as e:
+        logger.error(f"Scenario comparison failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================
+# ECL CALCULATOR API ENDPOINTS (V9 NEW)
+# ============================================
+
+
+@app.get("/api/ecl/loan/{loan_id}/calculate")
+async def calculate_loan_ecl(loan_id: str):
+    """Calculate IFRS 9 ECL for a specific loan."""
+    try:
+        from covenant_service.covenant_service.tools.ecl_calculator import get_ecl_calculator
+        from common.bigquery_client import get_bigquery_client
+        
+        bq = get_bigquery_client()
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` WHERE loan_id = '{loan_id}'"
+        result = bq.client.query(query)
+        rows = list(result)
+        
+        if not rows:
+            return {'success': False, 'error': f'Loan {loan_id} not found'}
+        
+        loan = dict(rows[0])
+        loan['breach_probability'] = loan.get('breach_probability', 0.1)
+        loan['lgd'] = loan.get('lgd', 0.45)
+        loan['days_past_due'] = loan.get('days_past_due', 0)
+        
+        calculator = get_ecl_calculator()
+        ecl_result = calculator.calculate_ecl(loan)
+        
+        return {'success': True, **ecl_result.to_dict()}
+        
+    except Exception as e:
+        logger.error(f"ECL calculation failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/ecl/portfolio/summary")
+async def get_portfolio_ecl_summary():
+    """Get IFRS 9 ECL summary for entire portfolio."""
+    try:
+        from covenant_service.covenant_service.tools.ecl_calculator import get_ecl_calculator
+        from common.bigquery_client import get_bigquery_client
+        
+        bq = get_bigquery_client()
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 500"
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        for loan in loans:
+            loan['breach_probability'] = loan.get('breach_probability', 0.1)
+            loan['lgd'] = loan.get('lgd', 0.45)
+            loan['days_past_due'] = loan.get('days_past_due', 0)
+            loan['sector'] = loan.get('industry', 'unclassified')
+        
+        calculator = get_ecl_calculator()
+        portfolio_result = calculator.calculate_portfolio_ecl(loans)
+        
+        return {'success': True, **portfolio_result.to_dict()}
+        
+    except Exception as e:
+        logger.error(f"Portfolio ECL calculation failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================
+# MONTE CARLO VAR API ENDPOINTS (V9 NEW)
+# ============================================
+
+
+@app.post("/api/monte-carlo/run")
+async def run_monte_carlo_simulation(request: Request):
+    """
+    Run Monte Carlo simulation for VaR/CVaR calculation.
+    
+    Body: {
+        "n_simulations": 10000,
+        "correlation": 0.2,
+        "stressed": false,
+        "pd_multiplier": 1.0,
+        "lgd_multiplier": 1.0
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.monte_carlo_simulator import MonteCarloSimulator
+        from common.bigquery_client import get_bigquery_client
+        
+        data = await request.json()
+        n_simulations = data.get('n_simulations', 10000)
+        correlation = data.get('correlation', 0.2)
+        stressed = data.get('stressed', False)
+        pd_multiplier = data.get('pd_multiplier', 1.0)
+        lgd_multiplier = data.get('lgd_multiplier', 1.0)
+        
+        # Fetch loans
+        bq = get_bigquery_client()
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 200"
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        for loan in loans:
+            loan['breach_probability'] = loan.get('breach_probability', 0.1)
+            loan['lgd'] = loan.get('lgd', 0.45)
+        
+        # Run simulation
+        simulator = MonteCarloSimulator(n_simulations=n_simulations, seed=42)
+        
+        if stressed:
+            mc_result = simulator.run_stressed_simulation(
+                loans, pd_multiplier, lgd_multiplier, correlation_stress=0.1
+            )
+        else:
+            mc_result = simulator.run_simulation(loans, correlation)
+        
+        return {'success': True, **mc_result.to_dict()}
+        
+    except Exception as e:
+        logger.error(f"Monte Carlo simulation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/monte-carlo/var/{confidence}")
+async def get_var_at_confidence(confidence: float):
+    """
+    Get VaR at specific confidence level (e.g., 0.95, 0.99).
+    """
+    try:
+        from covenant_service.covenant_service.tools.monte_carlo_simulator import MonteCarloSimulator
+        from common.bigquery_client import get_bigquery_client
+        
+        # Validate confidence level
+        if confidence < 0.5 or confidence > 0.999:
+            return {'success': False, 'error': 'Confidence must be between 0.5 and 0.999'}
+        
+        # Fetch loans
+        bq = get_bigquery_client()
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 200"
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        for loan in loans:
+            loan['breach_probability'] = loan.get('breach_probability', 0.1)
+            loan['lgd'] = loan.get('lgd', 0.45)
+        
+        # Run simulation
+        simulator = MonteCarloSimulator(n_simulations=10000, seed=42)
+        mc_result = simulator.run_simulation(loans)
+        
+        # Calculate custom VaR
+        import numpy as np
+        losses = simulator.simulate_portfolio_losses(loans, correlation=0.2)
+        var_amount = np.percentile(losses, confidence * 100)
+        cvar_amount = losses[losses >= var_amount].mean()
+        
+        total_ead = sum(loan.get('facility_amount', 0) for loan in loans)
+        
+        return {
+            'success': True,
+            'confidence_level': confidence,
+            'var_amount': round(var_amount, 2),
+            'var_pct_of_portfolio': round(var_amount / total_ead * 100, 2) if total_ead > 0 else 0,
+            'cvar_amount': round(cvar_amount, 2),
+            'cvar_pct_of_portfolio': round(cvar_amount / total_ead * 100, 2) if total_ead > 0 else 0,
+            'portfolio_ead': round(total_ead, 2),
+            'n_simulations': 10000,
+        }
+        
+    except Exception as e:
+        logger.error(f"VaR calculation failed: {e}")
+        return {'success': False, 'error': str(e)}
+# ============================================
+# PRODUCTION STRESS TESTING (REAL ML INTEGRATION)
+# ============================================
+
+
+@app.post("/api/stress-test/production/run")
+async def run_production_stress_test(request: Request):
+    """
+    Run PRODUCTION stress test with REAL ML predictions.
+    
+    Uses:
+    - Real PD from Breach Predictor (LightGBM on 720K loans)
+    - Real LGD from Two-Stage LGD model
+    - FRED API for macro data
+    
+    Body: {
+        "scenario_id": "eco_moderate",
+        "loan_ids": ["LOAN001"] (optional)
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.stress_testing_service import (
+            get_production_stress_testing_service
+        )
+        from common.bigquery_client import get_bigquery_client
+        
+        data = await request.json()
+        scenario_id = data.get('scenario_id', 'eco_moderate')
+        loan_ids = data.get('loan_ids', None)
+        
+        # Fetch loans from BigQuery
+        bq = get_bigquery_client()
+        
+        if loan_ids:
+            placeholders = ', '.join([f"'{lid}'" for lid in loan_ids])
+            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` WHERE loan_id IN ({placeholders})"
+        else:
+            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 50"
+        
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        if not loans:
+            return {'success': False, 'error': 'No loans found'}
+        
+        # Run production stress test with REAL ML predictions
+        service = get_production_stress_testing_service()
+        result = service.stress_test_portfolio_production(loans, scenario_id)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Production stress test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/monte-carlo/production/run")
+async def run_production_monte_carlo(request: Request):
+    """
+    Run Monte Carlo VaR/CVaR with REAL ML predictions.
+    
+    Body: {
+        "n_simulations": 10000
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.stress_testing_service import (
+            get_production_stress_testing_service
+        )
+        from common.bigquery_client import get_bigquery_client
+        
+        data = await request.json()
+        n_simulations = data.get('n_simulations', 10000)
+        
+        # Fetch loans
+        bq = get_bigquery_client()
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 100"
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        if not loans:
+            return {'success': False, 'error': 'No loans found'}
+        
+        # Run Monte Carlo with REAL predictions
+        service = get_production_stress_testing_service()
+        result = service.run_monte_carlo_with_real_predictions(loans, n_simulations)
+        
+        return {'success': True, **result}
+        
+    except Exception as e:
+        logger.error(f"Production Monte Carlo failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/stress-test/macro-data")
+async def get_current_macro_data():
+    """Get current macroeconomic data from FRED API."""
+    try:
+        from covenant_service.covenant_service.tools.stress_testing_service import (
+            get_production_stress_testing_service
+        )
+        
+        service = get_production_stress_testing_service()
+        macro_data = service.get_current_macro_data()
+        
+        return {'success': True, **macro_data}
+        
+    except Exception as e:
+        logger.error(f"Macro data fetch failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================
+# WHAT-IF SCENARIO BUILDER (V9 NEW)
+# ============================================
+
+
+@app.post("/api/stress-test/what-if")
+async def run_what_if_scenario(request: Request):
+    """
+    Run custom What-If stress scenario.
+    
+    Body: {
+        "name": "Custom Recession Scenario",
+        "pd_multiplier": 2.0,
+        "lgd_multiplier": 1.3,
+        "sector_adjustments": {
+            "real_estate": 1.5,
+            "technology": 0.9
+        }
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.stress_testing_engine import (
+            StressScenario, ScenarioType, StressTester
+        )
+        from covenant_service.covenant_service.tools.stress_testing_service import (
+            get_production_stress_testing_service
+        )
+        from common.bigquery_client import get_bigquery_client
+        
+        data = await request.json()
+        
+        # Create custom scenario
+        custom_scenario = StressScenario(
+            id=f"custom_{datetime.utcnow().strftime('%H%M%S')}",
+            name=data.get('name', 'Custom Scenario'),
+            description=data.get('description', 'User-defined what-if scenario'),
+            scenario_type=ScenarioType.ECONOMIC,
+            gdp_shock=data.get('gdp_shock', -0.03),
+            unemployment_shock=data.get('unemployment_shock', 0.05),
+            interest_rate_shock=data.get('interest_rate_shock', 0.01),
+            pd_multiplier=data.get('pd_multiplier', 1.5),
+            lgd_multiplier=data.get('lgd_multiplier', 1.2),
+            sector_adjustments=data.get('sector_adjustments', {}),
+            horizon_years=data.get('horizon_years', 1),
+        )
+        
+        # Fetch loans
+        bq = get_bigquery_client()
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 50"
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        if not loans:
+            return {'success': False, 'error': 'No loans found'}
+        
+        # Get real predictions
+        service = get_production_stress_testing_service()
+        
+        # Enhance loans with real ML predictions
+        loan_results = []
+        total_base_ecl = 0
+        total_stressed_ecl = 0
+        
+        for loan in loans:
+            real_pd = service.get_real_pd(loan)
+            real_lgd = service.get_real_lgd(loan)
+            ead = loan.get('facility_amount', 0)
+            sector = loan.get('industry', 'unclassified')
+            
+            stressed_pd = custom_scenario.get_adjusted_pd(real_pd, sector)
+            stressed_lgd = custom_scenario.get_adjusted_lgd(real_lgd)
+            
+            base_ecl = real_pd * real_lgd * ead
+            stressed_ecl = stressed_pd * stressed_lgd * ead
+            
+            total_base_ecl += base_ecl
+            total_stressed_ecl += stressed_ecl
+            
+            loan_results.append({
+                'loan_id': loan.get('loan_id'),
+                'base_ecl': round(base_ecl, 2),
+                'stressed_ecl': round(stressed_ecl, 2),
+                'ecl_increase_pct': round((stressed_ecl - base_ecl) / base_ecl * 100, 2) if base_ecl > 0 else 0,
+            })
+        
+        ecl_increase_pct = ((total_stressed_ecl - total_base_ecl) / total_base_ecl * 100) if total_base_ecl > 0 else 0
+        
+        return {
+            'success': True,
+            'custom_scenario': True,
+            'scenario': {
+                'id': custom_scenario.id,
+                'name': custom_scenario.name,
+                'pd_multiplier': custom_scenario.pd_multiplier,
+                'lgd_multiplier': custom_scenario.lgd_multiplier,
+                'sector_adjustments': custom_scenario.sector_adjustments,
+            },
+            'portfolio_summary': {
+                'loan_count': len(loans),
+                'total_ead': round(sum(l.get('facility_amount', 0) for l in loans), 2),
+            },
+            'ecl_summary': {
+                'base_ecl_total': round(total_base_ecl, 2),
+                'stressed_ecl_total': round(total_stressed_ecl, 2),
+                'ecl_increase_pct': round(ecl_increase_pct, 2),
+            },
+            'loan_results': loan_results[:20],
+        }
+        
+    except Exception as e:
+        logger.error(f"What-if scenario failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================
+# STRESS TEST STORAGE API (V9 NEW)
+# ============================================
+
+
+@app.post("/api/stress-test/save")
+async def save_stress_test_result(request: Request):
+    """Save stress test result to BigQuery for compliance."""
+    try:
+        from covenant_service.covenant_service.tools.stress_test_storage import (
+            get_stress_test_storage
+        )
+        
+        data = await request.json()
+        storage = get_stress_test_storage()
+        result_id = storage.save_result(data)
+        
+        if result_id:
+            return {'success': True, 'result_id': result_id}
+        else:
+            return {'success': False, 'error': 'Failed to save result'}
+        
+    except Exception as e:
+        logger.error(f"Save stress test failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/stress-test/history")
+async def get_stress_test_history(limit: int = 50, scenario_id: str = None):
+    """Get stress test history from BigQuery."""
+    try:
+        from covenant_service.covenant_service.tools.stress_test_storage import (
+            get_stress_test_storage
+        )
+        
+        storage = get_stress_test_storage()
+        history = storage.get_history(limit=limit, scenario_id=scenario_id)
+        
+        return {
+            'success': True,
+            'history': history,
+            'total': len(history),
+        }
+        
+    except Exception as e:
+        logger.error(f"Get stress test history failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/stress-test/result/{result_id}")
+async def get_stress_test_result(result_id: str):
+    """Get a specific stress test result."""
+    try:
+        from covenant_service.covenant_service.tools.stress_test_storage import (
+            get_stress_test_storage
+        )
+        
+        storage = get_stress_test_storage()
+        result = storage.get_result(result_id)
+        
+        if result:
+            return {'success': True, **result}
+        else:
+            return {'success': False, 'error': 'Result not found'}
+        
+    except Exception as e:
+        logger.error(f"Get stress test result failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/stress-test/statistics")
+async def get_stress_test_statistics():
+    """Get aggregate statistics for stress tests."""
+    try:
+        from covenant_service.covenant_service.tools.stress_test_storage import (
+            get_stress_test_storage
+        )
+        
+        storage = get_stress_test_storage()
+        stats = storage.get_statistics()
+        
+        return {'success': True, **stats}
+        
+    except Exception as e:
+        logger.error(f"Get stress test statistics failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)

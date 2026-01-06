@@ -51,6 +51,23 @@ from covenant_service.covenant_service.tools.concentration_tools import (
     calculate_hhi,
     ConcentrationRisk,
 )
+from covenant_service.covenant_service.tools.stress_testing_engine import (
+    StressTester,
+    StressScenario,
+    get_stress_tester,
+    list_all_scenarios,
+    get_scenario,
+    ALL_SCENARIOS,
+)
+from covenant_service.covenant_service.tools.ecl_calculator import (
+    ECLCalculator,
+    IFRS9Stage,
+    get_ecl_calculator,
+)
+from covenant_service.covenant_service.tools.monte_carlo_simulator import (
+    MonteCarloSimulator,
+    get_monte_carlo_simulator,
+)
 
 __all__ = [
     # Data retrieval
@@ -94,4 +111,19 @@ __all__ = [
     "calculate_marginal_concentration_impact",
     "calculate_hhi",
     "ConcentrationRisk",
+    # Stress Testing (V9 NEW)
+    "StressTester",
+    "StressScenario",
+    "get_stress_tester",
+    "list_all_scenarios",
+    "get_scenario",
+    "ALL_SCENARIOS",
+    # ECL Calculator (V9 NEW)
+    "ECLCalculator",
+    "IFRS9Stage",
+    "get_ecl_calculator",
+    # Monte Carlo VaR (V9 NEW)
+    "MonteCarloSimulator",
+    "get_monte_carlo_simulator",
 ]
+

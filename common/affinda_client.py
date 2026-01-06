@@ -15,9 +15,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, rely on system env vars
+
 logger = logging.getLogger(__name__)
 
-# Environment configuration
+# Environment configuration (loaded after dotenv)
 AFFINDA_API_KEY = os.getenv("AFFINDA_API_KEY", "")
 AFFINDA_WORKSPACE_ID = os.getenv("AFFINDA_WORKSPACE_ID", "")
 AFFINDA_COLLECTION_ID = os.getenv("AFFINDA_COLLECTION_ID", "")

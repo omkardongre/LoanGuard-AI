@@ -61,6 +61,8 @@ import {
 import { LGDCard } from "@/components/lgd-card";
 import { PrepaymentCard } from "@/components/prepayment-card";
 import { ESGRiskCard } from "@/components/esg-risk-card";
+import { StressTestCard } from "@/components/stress-test-card";
+import { ClimateRiskCard } from "@/components/climate-risk-card";
 
 function formatCurrency(amount: number, currency: string = "USD") {
   return new Intl.NumberFormat("en-US", {
@@ -346,6 +348,7 @@ export default function LoanDetailPage() {
             <TabsTrigger value="prepayment">Prepayment Risk</TabsTrigger>
             <TabsTrigger value="velocity">Risk Velocity</TabsTrigger>
             <TabsTrigger value="cure">Cure Calculator</TabsTrigger>
+            <TabsTrigger value="stress">Stress Testing</TabsTrigger>
             {loan.is_sll && <TabsTrigger value="esg">ESG</TabsTrigger>}
           </TabsList>
 
@@ -1095,6 +1098,14 @@ export default function LoanDetailPage() {
               </Card>
             </TabsContent>
           )}
+
+          {/* Stress Testing Tab */}
+          <TabsContent value="stress" className="mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <StressTestCard />
+              <ClimateRiskCard />
+            </div>
+          </TabsContent>
         </Tabs>
       </main>
     </div>

@@ -1592,6 +1592,141 @@ async def get_prepayment_model_info():
         return {'success': False, 'error': str(e)}
 
 
+# ============================================
+# V9 NEW: PREPAYMENT V2 ENDPOINTS (FRED INTEGRATION)
+# ============================================
+
+@app.get("/api/loans/{loan_id}/prepayment/v2", tags=["V9 - Prepayment Risk V2"])
+async def get_loan_prepayment_v2(loan_id: str, months_since_origination: int = 24):
+    """
+    V2 Prepayment prediction with FRED market rate integration.
+    
+    PRODUCTION-LEVEL: Uses real Federal Reserve data for refinancing incentive.
+    
+    Returns:
+    - Adjusted prepayment probability
+    - CPR/SMM (bank-standard metrics)
+    - Refinancing incentive analysis
+    - Seasoning factor
+    """
+    try:
+        from covenant_service.covenant_service.tools.prepayment_predictor_v2 import get_prepayment_predictor_v2
+        
+        predictor = get_prepayment_predictor_v2()
+        
+        # Get loan data from database
+        loan_data = {}
+        if client:
+            result = client.table("loans").select("*").eq("loan_id", loan_id).limit(1).maybe_single().execute()
+            if result.data:
+                loan_data = result.data
+        
+        if not loan_data:
+            loan_data = {
+                'term': ' 36 months',
+                'grade': 'B',
+                'int_rate': 10.5,
+                'loan_amnt': 15000,
+            }
+        
+        prediction = predictor.predict_with_market(
+            loan_data, 
+            months_since_origination=months_since_origination
+        )
+        
+        return {
+            'loan_id': loan_id,
+            'success': True,
+            **prediction.to_dict()
+        }
+        
+    except Exception as e:
+        logger.error(f"V2 Prepayment prediction failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/loans/{loan_id}/prepayment/v2/scenario", tags=["V9 - Prepayment Risk V2"])
+async def get_prepayment_scenario_analysis(loan_id: str):
+    """
+    What-if scenario analysis for prepayment risk.
+    
+    Shows how prepayment probability changes with market rate changes.
+    Essential for portfolio stress testing.
+    """
+    try:
+        from covenant_service.covenant_service.tools.prepayment_predictor_v2 import get_prepayment_predictor_v2
+        
+        predictor = get_prepayment_predictor_v2()
+        
+        # Get loan data
+        loan_data = {}
+        if client:
+            result = client.table("loans").select("*").eq("loan_id", loan_id).limit(1).maybe_single().execute()
+            if result.data:
+                loan_data = result.data
+        
+        if not loan_data:
+            loan_data = {'int_rate': 10.5}
+        
+        scenarios = predictor.get_scenario_analysis(
+            loan_data,
+            rate_changes=[-1.5, -1.0, -0.5, 0, 0.5, 1.0, 1.5]
+        )
+        
+        return {
+            'loan_id': loan_id,
+            'success': True,
+            **scenarios
+        }
+        
+    except Exception as e:
+        logger.error(f"Scenario analysis failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/ml/fred/rates", tags=["V9 - FRED Integration"])
+async def get_current_fred_rates():
+    """
+    Get current market rates from FRED (Federal Reserve Economic Data).
+    
+    FREE API - Official Federal Reserve data.
+    Updates: Weekly (mortgage rates), Daily (treasury rates)
+    """
+    try:
+        from covenant_service.covenant_service.tools.fred_integration import get_fred_client, SERVICE_INFO
+        
+        fred = get_fred_client()
+        rates = fred.get_all_rates()
+        
+        return {
+            'success': True,
+            'rates': rates,
+            'service_info': SERVICE_INFO,
+        }
+        
+    except Exception as e:
+        logger.error(f"FRED rates retrieval failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/ml/prepayment/v2/model-info", tags=["V9 - Prepayment Risk V2"])
+async def get_prepayment_v2_model_info():
+    """
+    Get V2 prepayment model metadata including FRED integration details.
+    """
+    try:
+        from covenant_service.covenant_service.tools.prepayment_predictor_v2 import get_prepayment_predictor_v2
+        
+        predictor = get_prepayment_predictor_v2()
+        info = predictor.get_model_info()
+        
+        return {'success': True, **info}
+        
+    except Exception as e:
+        logger.error(f"V2 model info retrieval failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)

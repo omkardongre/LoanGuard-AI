@@ -60,10 +60,12 @@ export default function LoansPage() {
             </h1>
             <p className="text-slate-500">Manage and monitor all loans</p>
           </div>
-          <Button className="bg-emerald-600 hover:bg-emerald-700">
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Document
-          </Button>
+          <a href="/upload">
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Document
+            </Button>
+          </a>
         </div>
 
         {/* Filters */}

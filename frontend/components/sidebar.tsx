@@ -11,12 +11,14 @@ import {
   MessageSquare,
   Settings,
   ShieldAlert,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/loans", label: "Loans", icon: FileText },
+  { href: "/upload", label: "Upload", icon: Upload },
   { href: "/covenants", label: "Covenants", icon: Shield },
   {
     href: "/greenwashing",

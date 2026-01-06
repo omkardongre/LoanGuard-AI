@@ -1,22 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Sidebar } from "@/components/sidebar";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Send, Bot, User, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Send,
+  Bot,
+  User,
+  Sparkles,
+  Loader2,
+  RefreshCw,
+  ExternalLink,
+  AlertCircle,
+} from "lucide-react";
+import { chatWithAgent, fetchLoans, type Loan } from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  suggestions?: string[];
+  error?: boolean;
 }
 
-const suggestions = [
+const initialSuggestions = [
   "Show me loans at risk of covenant breach",
-  "Generate a compliance report for LOAN-0001",
-  "What is the ESG status of my SLL portfolio?",
+  "What is the ESG status of LOAN-0001?",
   "Which covenants are closest to their thresholds?",
-  "Explain the SHAP analysis for LOAN-0003 breach prediction",
+  "Explain the breach prediction for LOAN-0003",
+  "Generate a portfolio risk summary",
 ];
 
 export default function ChatPage() {
@@ -24,15 +38,37 @@ export default function ChatPage() {
     {
       role: "assistant",
       content:
-        "Hello! I'm LoanGuard AI, your covenant and ESG compliance assistant. How can I help you today?",
+        "Hello! I'm LoanGuard AI, your covenant and ESG compliance assistant powered by Gemini. How can I help you today?",
       timestamp: new Date(),
+      suggestions: initialSuggestions,
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [selectedLoan, setSelectedLoan] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  // Load loans for context selector
+  useEffect(() => {
+    async function loadLoans() {
+      try {
+        const response = await fetchLoans({ limit: 50 });
+        setLoans(response.loans || []);
+      } catch (err) {
+        console.error("Failed to load loans:", err);
+      }
+    }
+    loadLoans();
+  }, []);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function handleSend() {
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       role: "user",
@@ -41,24 +77,57 @@ export default function ChatPage() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput("");
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      const response: Message = {
-        role: "assistant",
-        content: getSimulatedResponse(input),
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, response]);
-      setIsLoading(false);
-    }, 1000);
-  };
+    try {
+      const response = await chatWithAgent(currentInput, selectedLoan || undefined);
 
-  const handleSuggestion = (suggestion: string) => {
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: response.response,
+        timestamp: new Date(),
+        suggestions: response.suggestions?.length > 0 ? response.suggestions : undefined,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (err) {
+      console.error("Chat error:", err);
+      const errorMessage: Message = {
+        role: "assistant",
+        content:
+          "I apologize, but I couldn't process your request. Please check if the API Gateway is running or try again later.",
+        timestamp: new Date(),
+        error: true,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function handleSuggestion(suggestion: string) {
     setInput(suggestion);
-  };
+  }
+
+  function handleClearChat() {
+    setMessages([
+      {
+        role: "assistant",
+        content:
+          "Hello! I'm LoanGuard AI, your covenant and ESG compliance assistant. How can I help you today?",
+        timestamp: new Date(),
+        suggestions: initialSuggestions,
+      },
+    ]);
+  }
+
+  // Get latest suggestions from messages
+  const latestSuggestions =
+    messages.length > 0 && messages[messages.length - 1].role === "assistant"
+      ? messages[messages.length - 1].suggestions
+      : undefined;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -67,33 +136,59 @@ export default function ChatPage() {
       <main className="flex-1 flex flex-col">
         {/* Header */}
         <div className="bg-white border-b p-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <Sparkles className="h-5 w-5 text-emerald-600" />
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-100 rounded-lg">
+                <Sparkles className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <h1 className="font-semibold text-slate-900">
+                  LoanGuard AI Assistant
+                </h1>
+                <p className="text-xs text-slate-500">
+                  Powered by Gemini • Ask about covenants, ESG, and compliance
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-semibold text-slate-900">
-                LoanGuard AI Assistant
-              </h1>
-              <p className="text-xs text-slate-500">
-                Ask questions about covenants, ESG, and compliance
-              </p>
+            <div className="flex items-center gap-2">
+              {/* Loan Context Selector */}
+              <select
+                value={selectedLoan || ""}
+                onChange={(e) => setSelectedLoan(e.target.value || null)}
+                className="px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">All Loans (Portfolio)</option>
+                {loans.map((loan) => (
+                  <option key={loan.loan_id} value={loan.loan_id}>
+                    {loan.loan_id} - {loan.borrower_name}
+                  </option>
+                ))}
+              </select>
+              <Button variant="outline" size="sm" onClick={handleClearChat}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
           {messages.map((message, idx) => (
             <div
               key={idx}
-              className={`flex gap-3 ${
-                message.role === "user" ? "justify-end" : ""
-              }`}
+              className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}
             >
               {message.role === "assistant" && (
-                <div className="p-2 bg-emerald-100 rounded-full h-fit">
-                  <Bot className="h-4 w-4 text-emerald-600" />
+                <div
+                  className={`p-2 rounded-full h-fit ${
+                    message.error ? "bg-red-100" : "bg-emerald-100"
+                  }`}
+                >
+                  {message.error ? (
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                  ) : (
+                    <Bot className="h-4 w-4 text-emerald-600" />
+                  )}
                 </div>
               )}
 
@@ -101,15 +196,21 @@ export default function ChatPage() {
                 className={`max-w-2xl p-4 rounded-xl ${
                   message.role === "user"
                     ? "bg-emerald-600 text-white"
+                    : message.error
+                    ? "bg-red-50 border border-red-200 shadow-sm"
                     : "bg-white border shadow-sm"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
+                <div className="prose prose-sm max-w-none">
+                  {message.content.split("\n").map((line, i) => (
+                    <p key={i} className="mb-1 last:mb-0">
+                      {line}
+                    </p>
+                  ))}
+                </div>
                 <p
                   className={`text-xs mt-2 ${
-                    message.role === "user"
-                      ? "text-emerald-200"
-                      : "text-slate-400"
+                    message.role === "user" ? "text-emerald-200" : "text-slate-400"
                   }`}
                 >
                   {message.timestamp.toLocaleTimeString()}
@@ -130,30 +231,51 @@ export default function ChatPage() {
                 <Bot className="h-4 w-4 text-emerald-600" />
               </div>
               <div className="bg-white border shadow-sm p-4 rounded-xl">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce delay-100" />
-                  <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce delay-200" />
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                  <span className="text-sm text-slate-500">Thinking...</span>
                 </div>
               </div>
             </div>
           )}
+
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Suggestions */}
-        {messages.length === 1 && (
-          <div className="px-4 pb-2">
+        {latestSuggestions && latestSuggestions.length > 0 && !isLoading && (
+          <div className="px-4 pb-2 max-w-4xl mx-auto w-full">
             <p className="text-xs text-slate-500 mb-2">Suggested questions:</p>
             <div className="flex flex-wrap gap-2">
-              {suggestions.map((suggestion, idx) => (
+              {latestSuggestions.map((suggestion, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSuggestion(suggestion)}
-                  className="text-sm px-3 py-1.5 bg-white border rounded-full hover:bg-slate-50 text-slate-700"
+                  className="text-sm px-3 py-1.5 bg-white border rounded-full hover:bg-slate-50 text-slate-700 transition-colors"
                 >
                   {suggestion}
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Selected Loan Context */}
+        {selectedLoan && (
+          <div className="px-4 pb-2 max-w-4xl mx-auto w-full">
+            <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded-lg border border-emerald-200">
+              <Badge variant="outline" className="text-emerald-700">
+                Context: {selectedLoan}
+              </Badge>
+              <span className="text-sm text-emerald-700">
+                {loans.find((l) => l.loan_id === selectedLoan)?.borrower_name}
+              </span>
+              <a
+                href={`/loans/${selectedLoan}`}
+                className="text-xs text-emerald-600 hover:underline flex items-center gap-1 ml-auto"
+              >
+                View Loan <ExternalLink className="h-3 w-3" />
+              </a>
             </div>
           </div>
         )}
@@ -165,79 +287,32 @@ export default function ChatPage() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Ask about covenants, ESG compliance, or loan status..."
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              placeholder={
+                selectedLoan
+                  ? `Ask about ${selectedLoan}...`
+                  : "Ask about covenants, ESG compliance, or loan status..."
+              }
               className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              disabled={isLoading}
             />
             <Button
               onClick={handleSend}
               disabled={isLoading || !input.trim()}
               className="bg-emerald-600 hover:bg-emerald-700"
             >
-              <Send className="h-4 w-4" />
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
+          <p className="text-xs text-slate-400 text-center mt-2">
+            LoanGuard AI may make mistakes. Verify important information.
+          </p>
         </div>
       </main>
     </div>
   );
-}
-
-function getSimulatedResponse(input: string): string {
-  const lowerInput = input.toLowerCase();
-
-  if (lowerInput.includes("risk") || lowerInput.includes("breach")) {
-    return `Based on our ML breach prediction model, here are the loans at highest risk:
-
-**High Risk (>50% probability):**
-• LOAN-0003 (TechStart Inc): 72% breach probability
-  - Key factors: Declining EBITDA, rising debt levels
-  - Recommended action: Schedule borrower review
-
-**Medium Risk (25-50%):**
-• LOAN-0002 (Global Industries): 35% probability
-• LOAN-0005 (Manufacturing Plus): 28% probability
-
-Would you like me to generate a detailed risk report or schedule alerts for these loans?`;
-  }
-
-  if (lowerInput.includes("esg") || lowerInput.includes("sll")) {
-    return `**ESG Portfolio Summary:**
-
-📊 **SLL Loans:** 18 of 50 total loans
-✅ **SPT Achievement Rate:** 78% (14/18 loans)
-📈 **Average ESG Score:** 72.5
-
-**Top Performers:**
-• LOAN-0004 (Energy Solutions): -7.5 bps margin adjustment
-• LOAN-0001 (Acme Corp): -5 bps margin adjustment
-
-**Attention Needed:**
-• LOAN-0003: Greenwashing risk flagged (MEDIUM)
-• 3 loans have KPIs behind target
-
-Shall I drill down into any specific loan?`;
-  }
-
-  if (lowerInput.includes("report")) {
-    return `I can generate the following compliance reports:
-
-1. **Covenant Compliance Report** - Full portfolio status
-2. **ESG Performance Report** - SLL KPI tracking
-3. **Risk Assessment Report** - ML predictions and trends
-4. **Executive Summary** - High-level dashboard
-
-Which report would you like me to generate? I can export to PDF or send via email.`;
-  }
-
-  return `I understand you're asking about "${input}". 
-
-I can help you with:
-• Covenant compliance monitoring
-• ESG and SLL tracking
-• Breach predictions with SHAP explanations
-• Alert management
-• Report generation
-
-Could you please be more specific about what you'd like to know?`;
 }

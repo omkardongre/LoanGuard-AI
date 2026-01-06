@@ -106,9 +106,14 @@ COMPLETE_HONEST_ASSESSMENT.md
 VERIFICATION_REPORT.md
 SETUP_GUIDE.md
 
-# ML models - track trained models, exclude training data
+# ML models - exclude binary model files (can be regenerated from training scripts)
+models/*.pkl
+models/*.joblib
 models/training_data.csv
 models/*.csv
+
+# SHAP explainers (can be regenerated)
+models/*_explainer.pkl
 
 # Training data (large files)
 data/

@@ -796,3 +796,101 @@ export async function checkHealth(): Promise<{
   return apiRequest("/health");
 }
 
+// ============================================
+// Prepayment Risk V2 (V9 - FRED Integration)
+// ============================================
+
+export interface PrepaymentPredictionV2 {
+  loan_id: string;
+  base_prepay_probability: number;
+  adjusted_prepay_probability: number;
+  prepay_probability_pct: string;
+  will_prepay: boolean;
+  risk_category: "HIGH_PREPAY" | "MODERATE_PREPAY" | "LOW_PREPAY";
+  loan_rate: number;
+  market_rate: number;
+  refinancing_spread: number;
+  refinancing_incentive: "STRONG_INCENTIVE" | "MODERATE_INCENTIVE" | "WEAK_INCENTIVE" | "NO_INCENTIVE" | "DISINCENTIVE";
+  months_since_origination: number;
+  seasoning_stage: "RAMP_UP" | "MATURE" | "BURNOUT";
+  seasoning_factor: number;
+  CPR: number;  // Conditional Prepayment Rate
+  SMM: number;  // Single Monthly Mortality
+  model_version: string;
+  data_source: string;
+  as_of: string;
+  success: boolean;
+}
+
+export interface PrepaymentScenario {
+  rate_change: string;
+  market_rate: number;
+  spread: number;
+  spread_bps: number;
+  prepay_probability: number;
+  risk_category: string;
+}
+
+export interface PrepaymentScenarioAnalysis {
+  loan_id: string;
+  loan_rate: number;
+  current_market_rate: number;
+  current_spread: number;
+  base_prepay_probability: number;
+  scenarios: PrepaymentScenario[];
+  analysis_date: string;
+  success: boolean;
+}
+
+export interface FREDRates {
+  mortgage_30y: number;
+  mortgage_15y: number;
+  treasury_10y: number;
+  fed_funds: number;
+  as_of: string;
+  source: string;
+}
+
+export interface FREDRatesResponse {
+  success: boolean;
+  rates: FREDRates;
+  service_info: {
+    name: string;
+    provider: string;
+    cost: string;
+    production_level: boolean;
+  };
+}
+
+export async function fetchPrepaymentV2(
+  loanId: string,
+  monthsSinceOrigination?: number
+): Promise<PrepaymentPredictionV2> {
+  const query = monthsSinceOrigination ? `?months_since_origination=${monthsSinceOrigination}` : "";
+  return apiRequest(`/api/loans/${loanId}/prepayment/v2${query}`);
+}
+
+export async function fetchPrepaymentScenario(
+  loanId: string
+): Promise<PrepaymentScenarioAnalysis> {
+  return apiRequest(`/api/loans/${loanId}/prepayment/v2/scenario`);
+}
+
+export async function fetchFREDRates(): Promise<FREDRatesResponse> {
+  return apiRequest("/api/ml/fred/rates");
+}
+
+export async function fetchPrepaymentV2ModelInfo(): Promise<{
+  success: boolean;
+  version: string;
+  enhancements: string[];
+  external_data: {
+    source: string;
+    cost: string;
+    reliability: string;
+  };
+  current_rates: FREDRates;
+}> {
+  return apiRequest("/api/ml/prepayment/v2/model-info");
+}
+

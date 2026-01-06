@@ -45,6 +45,12 @@ from covenant_service.covenant_service.tools.dashboard_tools import (
     ComplianceStatus,
     TrendDirection,
 )
+from covenant_service.covenant_service.tools.concentration_tools import (
+    get_portfolio_concentration,
+    calculate_marginal_concentration_impact,
+    calculate_hhi,
+    ConcentrationRisk,
+)
 
 __all__ = [
     # Data retrieval
@@ -83,4 +89,9 @@ __all__ = [
     "get_covenant_detail",
     "ComplianceStatus",
     "TrendDirection",
+    # Portfolio Concentration (V8 P1)
+    "get_portfolio_concentration",
+    "calculate_marginal_concentration_impact",
+    "calculate_hhi",
+    "ConcentrationRisk",
 ]

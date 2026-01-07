@@ -2486,6 +2486,431 @@ async def get_stress_test_statistics():
         return {'success': False, 'error': str(e)}
 
 
+# ============================================
+# LOAN PRICING OPTIMIZER (V9 NEW)
+# ============================================
+
+
+@app.post("/api/pricing/optimize")
+async def optimize_loan_pricing(request: Request):
+    """
+    Calculate optimal loan pricing using RAROC.
+    
+    Body: {
+        "loan_amount": 1000000,
+        "term_years": 5,
+        "pd": 0.08 (optional - will use ML if not provided),
+        "lgd": 0.45 (optional - will use ML if not provided),
+        "use_real_ml": true
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.loan_pricing import (
+            get_pricing_optimizer
+        )
+        
+        data = await request.json()
+        optimizer = get_pricing_optimizer()
+        
+        loan = {
+            'loan_id': data.get('loan_id', 'pricing_request'),
+            'loan_amount': data.get('loan_amount', 100000),
+            'term_years': data.get('term_years', 5),
+            'pd': data.get('pd'),
+            'lgd': data.get('lgd'),
+            'interest_rate': data.get('interest_rate', 8.0),
+            'annual_income': data.get('annual_income', 75000),
+            'debt_to_income': data.get('debt_to_income', 20.0),
+            'fico_score': data.get('fico_score', 680),
+        }
+        
+        use_real_ml = data.get('use_real_ml', True)
+        result = optimizer.optimize_pricing(loan, use_real_ml=use_real_ml)
+        
+        return {
+            'success': True,
+            **result.to_dict(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Pricing optimization failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/pricing/portfolio")
+async def price_portfolio(request: Request):
+    """Price multiple loans using RAROC."""
+    try:
+        from covenant_service.covenant_service.tools.loan_pricing import (
+            get_pricing_optimizer
+        )
+        from common.bigquery_client import get_bigquery_client
+        
+        data = await request.json()
+        optimizer = get_pricing_optimizer()
+        
+        # Fetch loans from BigQuery
+        bq = get_bigquery_client()
+        limit = data.get('limit', 50)
+        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT {limit}"
+        result = bq.client.query(query)
+        loans = [dict(row) for row in result]
+        
+        if not loans:
+            return {'success': False, 'error': 'No loans found'}
+        
+        pricing_result = optimizer.price_portfolio(loans, use_real_ml=True)
+        return pricing_result
+        
+    except Exception as e:
+        logger.error(f"Portfolio pricing failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/pricing/loan/{loan_id}")
+async def get_loan_pricing(loan_id: str):
+    """Get optimal pricing for a specific loan."""
+    try:
+        from covenant_service.covenant_service.tools.loan_pricing import (
+            get_pricing_optimizer
+        )
+        from common.bigquery_client import get_bigquery_client
+        
+        bq = get_bigquery_client()
+        query = f"""
+            SELECT * FROM `{bq.project}.{bq.dataset}.loans` 
+            WHERE loan_id = '{loan_id}' LIMIT 1
+        """
+        result = bq.client.query(query)
+        rows = list(result)
+        
+        if not rows:
+            return {'success': False, 'error': 'Loan not found'}
+        
+        loan = dict(rows[0])
+        optimizer = get_pricing_optimizer()
+        pricing = optimizer.optimize_pricing(loan, use_real_ml=True)
+        
+        return {
+            'success': True,
+            **pricing.to_dict(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Get loan pricing failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================
+# SBA LOAN MODEL (V9 NEW)
+# ============================================
+
+
+@app.post("/api/ml/sba/predict")
+async def predict_sba_default(request: Request):
+    """
+    Predict default probability for SBA commercial loan.
+    
+    Body: {
+        "loan_amount": 500000,
+        "sba_guarantee_pct": 75,
+        "industry": "restaurants",
+        "business_age_years": 3,
+        "employees": 15,
+        "owner_credit_score": 680
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.sba_predictor import (
+            get_sba_predictor
+        )
+        
+        data = await request.json()
+        predictor = get_sba_predictor()
+        result = predictor.predict(data)
+        
+        return {
+            'success': True,
+            **result.to_dict(),
+        }
+        
+    except Exception as e:
+        logger.error(f"SBA prediction failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/ml/sba/batch")
+async def predict_sba_batch(request: Request):
+    """Predict for multiple SBA loans."""
+    try:
+        from covenant_service.covenant_service.tools.sba_predictor import (
+            get_sba_predictor
+        )
+        
+        data = await request.json()
+        loans = data.get('loans', [])
+        
+        if not loans:
+            return {'success': False, 'error': 'No loans provided'}
+        
+        predictor = get_sba_predictor()
+        result = predictor.predict_batch(loans)
+        return result
+        
+    except Exception as e:
+        logger.error(f"SBA batch prediction failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/ml/sba/model-info")
+async def get_sba_model_info():
+    """Get SBA model information."""
+    try:
+        from covenant_service.covenant_service.tools.sba_predictor import (
+            get_sba_predictor
+        )
+        
+        predictor = get_sba_predictor()
+        return {
+            'success': True,
+            **predictor.get_model_info(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Get SBA model info failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================
+# DOCUMENT COMPARISON (V9 NEW)
+# ============================================
+
+
+@app.post("/api/documents/compare")
+async def compare_documents(request: Request):
+    """
+    Compare two loan documents and highlight differences.
+    
+    Body: {
+        "document1_id": "doc_123",
+        "document2_id": "doc_456"
+    }
+    
+    OR
+    
+    {
+        "text1": "Document 1 content...",
+        "text2": "Document 2 content..."
+    }
+    """
+    try:
+        import difflib
+        
+        data = await request.json()
+        
+        text1 = data.get('text1', '')
+        text2 = data.get('text2', '')
+        
+        # If IDs provided, fetch from database (future implementation)
+        if data.get('document1_id') and data.get('document2_id'):
+            # Placeholder - would fetch from document store
+            text1 = f"Sample content for document {data.get('document1_id')}"
+            text2 = f"Sample content for document {data.get('document2_id')}"
+        
+        if not text1 or not text2:
+            return {'success': False, 'error': 'Two documents required for comparison'}
+        
+        # Split into lines for diff
+        lines1 = text1.splitlines()
+        lines2 = text2.splitlines()
+        
+        # Generate unified diff
+        differ = difflib.unified_diff(lines1, lines2, lineterm='')
+        diff_lines = list(differ)
+        
+        # Count changes
+        additions = sum(1 for line in diff_lines if line.startswith('+') and not line.startswith('+++'))
+        deletions = sum(1 for line in diff_lines if line.startswith('-') and not line.startswith('---'))
+        
+        # Calculate similarity
+        matcher = difflib.SequenceMatcher(None, text1, text2)
+        similarity = matcher.ratio()
+        
+        # Identify material changes (simplified)
+        material_changes = []
+        keywords = ['interest rate', 'covenant', 'collateral', 'maturity', 'principal', 'default', 'termination']
+        for line in diff_lines:
+            line_lower = line.lower()
+            for keyword in keywords:
+                if keyword in line_lower and (line.startswith('+') or line.startswith('-')):
+                    material_changes.append({
+                        'type': 'addition' if line.startswith('+') else 'deletion',
+                        'keyword': keyword,
+                        'line': line[1:].strip()[:100],  # First 100 chars
+                    })
+        
+        return {
+            'success': True,
+            'comparison': {
+                'similarity_pct': round(similarity * 100, 2),
+                'additions': additions,
+                'deletions': deletions,
+                'total_changes': additions + deletions,
+                'material_changes': material_changes[:10],
+            },
+            'diff_preview': diff_lines[:50],  # First 50 lines of diff
+        }
+        
+    except Exception as e:
+        logger.error(f"Document comparison failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/documents/extract-clauses")
+async def extract_clauses(request: Request):
+    """Extract key clauses from a loan document."""
+    try:
+        data = await request.json()
+        text = data.get('text', '')
+        
+        if not text:
+            return {'success': False, 'error': 'No document text provided'}
+        
+        # Simplified clause extraction (regex-based)
+        import re
+        
+        clauses = []
+        
+        # Common clause patterns
+        patterns = {
+            'interest_rate': r'interest rate[:\s]+(\d+\.?\d*%?)',
+            'maturity_date': r'matur(?:ity|es?)[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})',
+            'principal': r'principal[:\s]+\$?([\d,]+)',
+            'covenant': r'covenant[s]?[:\s]+(.{0,200})',
+            'default': r'default[:\s]+(.{0,200})',
+        }
+        
+        for clause_type, pattern in patterns.items():
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches[:3]:  # Max 3 per type
+                clauses.append({
+                    'type': clause_type,
+                    'value': match.strip() if isinstance(match, str) else match,
+                })
+        
+        return {
+            'success': True,
+            'clauses': clauses,
+            'document_length': len(text),
+        }
+        
+    except Exception as e:
+        logger.error(f"Clause extraction failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/documents/compare/semantic")
+async def compare_documents_semantic(request: Request):
+    """
+    AI-powered semantic document comparison using Gemini.
+    
+    Provides advanced analysis including:
+    - Material change identification with risk scoring
+    - Clause extraction and comparison
+    - Risk assessment and recommendations
+    
+    Body: {
+        "text1": "Original document content...",
+        "text2": "Amended document content...",
+        "context": "Optional: Loan type or additional context"
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.document_comparison import (
+            get_document_comparison_engine
+        )
+        
+        data = await request.json()
+        
+        text1 = data.get('text1', '')
+        text2 = data.get('text2', '')
+        context = data.get('context')
+        
+        if not text1 or not text2:
+            return {
+                'success': False, 
+                'error': 'Two documents required for comparison (text1 and text2)'
+            }
+        
+        # Use the AI-powered comparison engine
+        engine = get_document_comparison_engine()
+        result = await engine.compare_documents(text1, text2, context)
+        
+        return {
+            'success': True,
+            'analysis': engine.to_dict(result),
+            'meta': {
+                'engine': 'gemini-semantic',
+                'version': 'v9.0',
+                'has_ai_analysis': bool(result.summary and 'Enable Gemini' not in result.summary)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Semantic document comparison failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/documents/extract-clauses/semantic")
+async def extract_clauses_semantic(request: Request):
+    """
+    AI-powered clause extraction using Gemini.
+    
+    Extracts and categorizes key legal clauses with confidence scores.
+    
+    Body: {
+        "text": "Document content..."
+    }
+    """
+    try:
+        from covenant_service.covenant_service.tools.document_comparison import (
+            get_document_comparison_engine
+        )
+        
+        data = await request.json()
+        text = data.get('text', '')
+        
+        if not text:
+            return {'success': False, 'error': 'No document text provided'}
+        
+        engine = get_document_comparison_engine()
+        clauses = await engine.extract_clauses(text)
+        
+        return {
+            'success': True,
+            'clauses': [
+                {
+                    'type': c.clause_type,
+                    'text': c.text,
+                    'location': c.location,
+                    'confidence': c.confidence
+                }
+                for c in clauses
+            ],
+            'total_extracted': len(clauses),
+            'meta': {
+                'engine': 'gemini-semantic',
+                'version': 'v9.0'
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Semantic clause extraction failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)

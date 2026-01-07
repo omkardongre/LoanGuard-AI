@@ -68,6 +68,15 @@ from covenant_service.covenant_service.tools.monte_carlo_simulator import (
     MonteCarloSimulator,
     get_monte_carlo_simulator,
 )
+from covenant_service.covenant_service.tools.document_comparison import (
+    DocumentComparisonEngine,
+    get_document_comparison_engine,
+    compare_documents_tool,
+    extract_clauses_tool,
+    MaterialityLevel,
+    ChangeCategory,
+)
+
 
 __all__ = [
     # Data retrieval
@@ -125,5 +134,12 @@ __all__ = [
     # Monte Carlo VaR (V9 NEW)
     "MonteCarloSimulator",
     "get_monte_carlo_simulator",
+    # Document Comparison (V9 NEW)
+    "DocumentComparisonEngine",
+    "get_document_comparison_engine",
+    "compare_documents_tool",
+    "extract_clauses_tool",
+    "MaterialityLevel",
+    "ChangeCategory",
 ]
 

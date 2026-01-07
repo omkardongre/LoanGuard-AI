@@ -2911,6 +2911,191 @@ async def extract_clauses_semantic(request: Request):
         return {'success': False, 'error': str(e)}
 
 
+# =============================================================================
+# ESG FINANCIAL RISK ENDPOINTS (V9.1 - EBA 2026 Compliance)
+# =============================================================================
+
+@app.post("/api/esg/financial-risk/assess")
+async def assess_esg_financial_risk_endpoint(request: Request):
+    """
+    Assess ESG financial risk for a loan.
+    
+    ESG is treated as a financial risk factor per EBA 2026 guidelines.
+    Returns PD/LGD adjustments based on sector materiality and climate scenarios.
+    """
+    try:
+        from covenant_service.covenant_service.tools import (
+            assess_esg_financial_risk,
+        )
+        
+        data = await request.json()
+        loan_data = data.get('loan_data', data)
+        borrower_esg_data = data.get('borrower_esg_data')
+        climate_scenario = data.get('climate_scenario', 'current_policies')
+        
+        result = assess_esg_financial_risk(
+            loan_data=loan_data,
+            borrower_esg_data=borrower_esg_data,
+            climate_scenario=climate_scenario
+        )
+        
+        return {'success': True, **result}
+        
+    except Exception as e:
+        logger.error(f"ESG financial risk assessment failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/esg/portfolio/risk")
+async def assess_portfolio_esg_risk_endpoint(request: Request):
+    """
+    Assess ESG financial risk for a portfolio of loans.
+    
+    Returns portfolio-level ESG risk metrics and sector breakdown.
+    """
+    try:
+        from covenant_service.covenant_service.tools import (
+            assess_portfolio_esg_risk,
+        )
+        
+        data = await request.json()
+        climate_scenario = data.get('climate_scenario', 'current_policies')
+        
+        # Get loans from request or fetch from BigQuery
+        loans = data.get('loans')
+        if not loans:
+            loans = await fetch_loans_from_bigquery()
+        
+        result = assess_portfolio_esg_risk(
+            loans=loans,
+            climate_scenario=climate_scenario
+        )
+        
+        return {'success': True, **result}
+        
+    except Exception as e:
+        logger.error(f"Portfolio ESG risk assessment failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/esg/materiality/{sector}")
+async def get_sector_materiality_endpoint(sector: str):
+    """
+    Get material ESG issues for a sector.
+    
+    Returns TNFD/GRI aligned materiality mapping.
+    """
+    try:
+        from covenant_service.covenant_service.tools import (
+            get_sector_materiality,
+            calculate_sector_esg_risk_score,
+        )
+        
+        materiality = get_sector_materiality(sector)
+        risk_score = calculate_sector_esg_risk_score(sector)
+        
+        if not materiality:
+            return {'success': False, 'error': f'Unknown sector: {sector}'}
+        
+        return {
+            'success': True,
+            'sector': materiality.sector_name,
+            'sector_id': materiality.sector_id,
+            'transition_risk_exposure': materiality.transition_risk_exposure,
+            'physical_risk_exposure': materiality.physical_risk_exposure,
+            'material_issues': [
+                {
+                    'issue_id': issue.issue_id,
+                    'name': issue.name,
+                    'pillar': issue.pillar.value,
+                    'description': issue.description,
+                    'risk_weight': issue.risk_weight,
+                    'regulatory_reference': issue.regulatory_reference
+                }
+                for issue in materiality.material_issues
+            ],
+            'risk_score': risk_score
+        }
+        
+    except Exception as e:
+        logger.error(f"Sector materiality lookup failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/esg/climate-scenarios")
+async def get_climate_scenarios_endpoint():
+    """
+    Get available NGFS climate scenarios.
+    """
+    try:
+        from covenant_service.covenant_service.tools import (
+            get_available_climate_scenarios,
+        )
+        
+        result = get_available_climate_scenarios()
+        return {'success': True, **result}
+        
+    except Exception as e:
+        logger.error(f"Climate scenarios lookup failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/esg/climate-scenario/analyze")
+async def analyze_climate_scenario_endpoint(request: Request):
+    """
+    Analyze climate scenario impact for a sector.
+    """
+    try:
+        from covenant_service.covenant_service.tools import (
+            get_climate_scenario_impact,
+        )
+        
+        data = await request.json()
+        sector = data.get('sector', 'manufacturing')
+        scenario_id = data.get('scenario_id', 'current_policies')
+        
+        result = get_climate_scenario_impact(sector, scenario_id)
+        
+        return {'success': True, **result}
+        
+    except Exception as e:
+        logger.error(f"Climate scenario analysis failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/esg/sectors")
+async def get_all_sectors_endpoint():
+    """
+    Get all supported sectors for ESG analysis.
+    """
+    try:
+        from covenant_service.covenant_service.tools import (
+            get_all_sectors,
+            SECTOR_MATERIALITY_MAP,
+        )
+        
+        sectors = []
+        for sector_id, materiality in SECTOR_MATERIALITY_MAP.items():
+            sectors.append({
+                'sector_id': sector_id,
+                'sector_name': materiality.sector_name,
+                'transition_risk': materiality.transition_risk_exposure,
+                'physical_risk': materiality.physical_risk_exposure,
+                'material_issues_count': len(materiality.material_issues)
+            })
+        
+        return {
+            'success': True,
+            'sectors': sectors,
+            'total_sectors': len(sectors)
+        }
+        
+    except Exception as e:
+        logger.error(f"Sectors lookup failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
+

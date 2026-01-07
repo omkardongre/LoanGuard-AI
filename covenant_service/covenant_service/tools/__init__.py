@@ -76,6 +76,21 @@ from covenant_service.covenant_service.tools.document_comparison import (
     MaterialityLevel,
     ChangeCategory,
 )
+from covenant_service.covenant_service.tools.esg_materiality_data import (
+    get_sector_materiality,
+    calculate_sector_esg_risk_score,
+    get_climate_scenario_impact,
+    get_all_sectors,
+    SECTOR_MATERIALITY_MAP,
+    CLIMATE_SCENARIO_IMPACTS,
+)
+from covenant_service.covenant_service.tools.esg_financial_risk import (
+    ESGFinancialRiskScorer,
+    get_esg_financial_risk_scorer,
+    assess_esg_financial_risk,
+    assess_portfolio_esg_risk,
+    get_available_climate_scenarios,
+)
 
 
 __all__ = [
@@ -141,5 +156,17 @@ __all__ = [
     "extract_clauses_tool",
     "MaterialityLevel",
     "ChangeCategory",
+    # ESG Financial Risk (V9.1 - EBA 2026)
+    "get_sector_materiality",
+    "calculate_sector_esg_risk_score",
+    "get_climate_scenario_impact",
+    "get_all_sectors",
+    "SECTOR_MATERIALITY_MAP",
+    "CLIMATE_SCENARIO_IMPACTS",
+    "ESGFinancialRiskScorer",
+    "get_esg_financial_risk_scorer",
+    "assess_esg_financial_risk",
+    "assess_portfolio_esg_risk",
+    "get_available_climate_scenarios",
 ]
 

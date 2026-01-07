@@ -32,6 +32,7 @@ import {
 import { MonteCarloCard } from "@/components/monte-carlo-card";
 import { ECLSummaryCard } from "@/components/ecl-summary-card";
 import { WhatIfCard } from "@/components/what-if-card";
+import { ESGFinancialRiskCard } from "@/components/esg-financial-risk-card";
 
 // API base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -302,6 +303,7 @@ export default function AnalyticsPage() {
             <TabsTrigger value="risk">Risk Distribution</TabsTrigger>
             <TabsTrigger value="sector">Sector Analysis</TabsTrigger>
             <TabsTrigger value="macro">Macro Conditions</TabsTrigger>
+            <TabsTrigger value="esg">ESG Climate Risk</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -578,6 +580,69 @@ export default function AnalyticsPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ESG Climate Risk Tab */}
+          <TabsContent value="esg">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ESGFinancialRiskCard 
+                loanId="DEMO-001"
+                borrowerName="Sample Corporation"
+                sector="energy"
+                loanAmount={10000000}
+              />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Leaf className="h-5 w-5 text-emerald-600" />
+                    ESG as Financial Risk (EBA 2026)
+                  </CardTitle>
+                  <CardDescription>
+                    Regulatory context and credit risk integration
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-emerald-800 mb-2">Key Features</h4>
+                    <ul className="text-xs text-emerald-700 space-y-2">
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 text-[10px]">TNFD</Badge>
+                        <span>8 sector materiality mappings aligned with TNFD/GRI frameworks</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-blue-100 text-blue-800 text-[10px]">NGFS</Badge>
+                        <span>4 climate scenarios: Net Zero 2050, Delayed, Current Policies, Fragmented</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-purple-100 text-purple-800 text-[10px]">EBA</Badge>
+                        <span>PD/LGD adjustments based on ESG risk score per EBA 2026 guidelines</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Credit Risk Integration</h4>
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div className="p-2 bg-white rounded border">
+                        <p className="text-xs text-slate-500">PD Impact</p>
+                        <p className="text-sm font-bold text-slate-700">0.95x - 1.50x</p>
+                      </div>
+                      <div className="p-2 bg-white rounded border">
+                        <p className="text-xs text-slate-500">LGD Impact</p>
+                        <p className="text-sm font-bold text-slate-700">-2% to +15%</p>
+                      </div>
+                      <div className="p-2 bg-white rounded border">
+                        <p className="text-xs text-slate-500">ECL Impact</p>
+                        <p className="text-sm font-bold text-slate-700">Up to +50%</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-500 p-3 bg-blue-50 rounded-lg">
+                    <strong>Regulatory Timeline:</strong> EBA ESG Guidelines effective January 2026. 
+                    Banks must integrate ESG factors into credit risk assessment and capital planning.
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>

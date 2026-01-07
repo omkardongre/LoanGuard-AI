@@ -12,11 +12,13 @@ import {
   Settings,
   ShieldAlert,
   Upload,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/analytics", label: "Analytics", icon: BarChart3, highlight: true },
   { href: "/loans", label: "Loans", icon: FileText },
   { href: "/upload", label: "Upload", icon: Upload },
   { href: "/covenants", label: "Covenants", icon: Shield },

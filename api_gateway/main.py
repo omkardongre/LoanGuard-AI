@@ -3095,7 +3095,351 @@ async def get_all_sectors_endpoint():
         return {'success': False, 'error': str(e)}
 
 
+# =============================================================================
+# RISK COMMITTEE ENDPOINTS (V9.2)
+# =============================================================================
+
+class RiskCommitteeRequest(BaseModel):
+    """Request model for Risk Committee assessment."""
+    loan_id: str
+    borrower_name: str
+    sector: str
+    amount: float
+    annual_revenue: float  # REQUIRED - no default
+    location: str  # REQUIRED - no default
+    term_months: int = 60
+    interest_rate: float = 0.05
+    collateral_value: float = 0.0
+    existing_debt: float = 0.0
+    credit_score: int = 700
+    employment_length: str = "5 years"
+    home_ownership: str = "RENT"
+
+
+@app.post("/api/risk-committee/assess")
+async def assess_risk_committee(request: RiskCommitteeRequest):
+    """
+    Run multi-agent Risk Committee assessment.
+    
+    5 agents debate and vote on credit decision:
+    - CreditRiskAssessor
+    - ESGRiskAgent
+    - MarketContextAgent
+    - DevilsAdvocateAgent
+    - SynthesizerAgent
+    """
+    try:
+        from covenant_service.covenant_service.risk_committee import run_risk_committee
+        
+        result = run_risk_committee(
+            loan_id=request.loan_id,
+            borrower_name=request.borrower_name,
+            sector=request.sector,
+            amount=request.amount,
+            term_months=request.term_months,
+            interest_rate=request.interest_rate,
+            collateral_value=request.collateral_value,
+            existing_debt=request.existing_debt,
+            annual_revenue=request.annual_revenue,
+            credit_score=request.credit_score,
+            location=request.location,
+            employment_length=request.employment_length,
+            home_ownership=request.home_ownership
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Risk Committee assessment failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+class DebateRequest(BaseModel):
+    """Request model for multi-round debate assessment."""
+    loan_id: str
+    borrower_name: str
+    sector: str
+    amount: float
+    annual_revenue: float
+    location: str
+    term_months: int = 60
+    interest_rate: float = 0.05
+    collateral_value: float = 0.0
+    existing_debt: float = 0.0
+    credit_score: int = 700
+    employment_length: str = "5 years"
+    home_ownership: str = "RENT"
+    max_rounds: int = 2  # Configurable debate rounds
+
+
+@app.post("/api/risk-committee/debate")
+async def debate_risk_committee(request: DebateRequest):
+    """
+    Run multi-round agent debate for credit decision.
+    
+    Agents debate across multiple rounds until consensus
+    is achieved or max rounds reached. Returns full
+    debate history with round-by-round vote tracking.
+    
+    Args:
+        max_rounds: Number of debate rounds (default 2)
+    """
+    try:
+        from covenant_service.covenant_service.risk_committee import run_multi_round_debate
+        
+        result = run_multi_round_debate(
+            loan_id=request.loan_id,
+            borrower_name=request.borrower_name,
+            sector=request.sector,
+            amount=request.amount,
+            annual_revenue=request.annual_revenue,
+            location=request.location,
+            term_months=request.term_months,
+            interest_rate=request.interest_rate,
+            collateral_value=request.collateral_value,
+            existing_debt=request.existing_debt,
+            credit_score=request.credit_score,
+            employment_length=request.employment_length,
+            home_ownership=request.home_ownership,
+            max_rounds=request.max_rounds
+        )
+        
+        return {
+            'success': True,
+            **result
+        }
+        
+    except Exception as e:
+        logger.error(f"Risk Committee debate failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/risk-committee/info")
+async def risk_committee_info():
+    """Get information about the Risk Committee agents."""
+    return {
+        'success': True,
+        'name': 'Multi-Agent Risk Committee',
+        'version': 'V9.2',
+        'agents': [
+            {
+                'name': 'CreditRiskAssessor',
+                'role': 'Initial credit risk assessment using PD/LGD models'
+            },
+            {
+                'name': 'ESGRiskAgent',
+                'role': 'ESG financial risk overlay per EBA 2026 guidelines'
+            },
+            {
+                'name': 'MarketContextAgent',
+                'role': 'Sector and macroeconomic context analysis'
+            },
+            {
+                'name': 'DevilsAdvocateAgent',
+                'role': 'Challenges approval decisions, identifies hidden risks'
+            },
+            {
+                'name': 'SynthesizerAgent',
+                'role': 'Final consensus decision with audit trail'
+            }
+        ],
+        'decision_outcomes': ['approve', 'decline', 'refer', 'caution'],
+        'compliance': ['EU AI Act', 'EBA ESG Guidelines', 'IFRS 9']
+    }
+
+
+@app.post("/api/risk-committee/report/pdf")
+async def generate_risk_committee_pdf(request: RiskCommitteeRequest):
+    """
+    Generate PDF report for Risk Committee assessment.
+    
+    Runs the full assessment and returns a downloadable PDF.
+    """
+    from fastapi.responses import Response
+    
+    try:
+        from covenant_service.covenant_service.risk_committee import (
+            run_risk_committee,
+            generate_credit_decision_pdf,
+            RiskCommitteeWorkflow,
+            LoanApplication,
+        )
+        
+        # Create loan application
+        loan = LoanApplication(
+            loan_id=request.loan_id,
+            borrower_name=request.borrower_name,
+            sector=request.sector,
+            amount=request.amount,
+            term_months=request.term_months,
+            interest_rate=request.interest_rate,
+            collateral_value=request.collateral_value,
+            existing_debt=request.existing_debt,
+            annual_revenue=request.annual_revenue,
+            credit_score=request.credit_score,
+            location=request.location,
+            employment_length=request.employment_length,
+            home_ownership=request.home_ownership
+        )
+        
+        # Run workflow to get full state
+        workflow = RiskCommitteeWorkflow()
+        state = workflow.run(loan)
+        
+        # Generate PDF
+        pdf_bytes = generate_credit_decision_pdf(state)
+        
+        # Return PDF as download
+        filename = f"credit_decision_{request.loan_id}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# =============================================================================
+# APPROVAL QUEUE ENDPOINTS
+# =============================================================================
+
+class ApprovalActionRequest(BaseModel):
+    """Request model for approval actions."""
+    reviewer: str
+    notes: str = ""
+
+
+@app.get("/api/risk-committee/approvals/pending")
+async def get_pending_approvals():
+    """Get all pending approval requests."""
+    try:
+        from covenant_service.covenant_service.risk_committee.approval_queue import (
+            get_approval_queue
+        )
+        
+        queue = get_approval_queue()
+        pending = queue.get_pending()
+        
+        return {
+            'success': True,
+            'count': len(pending),
+            'requests': [r.to_dict() for r in pending]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get pending approvals: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/risk-committee/approvals/{request_id}")
+async def get_approval_request(request_id: str):
+    """Get a specific approval request by ID."""
+    try:
+        from covenant_service.covenant_service.risk_committee.approval_queue import (
+            get_approval_queue
+        )
+        
+        queue = get_approval_queue()
+        request = queue.get_request(request_id)
+        
+        if not request:
+            return {'success': False, 'error': f'Request {request_id} not found'}
+        
+        return {
+            'success': True,
+            'request': request.to_dict()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get approval request: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/risk-committee/approvals/{request_id}/approve")
+async def approve_request(request_id: str, action: ApprovalActionRequest):
+    """Approve a pending approval request."""
+    try:
+        from covenant_service.covenant_service.risk_committee.approval_queue import (
+            get_approval_queue
+        )
+        
+        queue = get_approval_queue()
+        request = queue.approve(
+            request_id=request_id,
+            reviewer=action.reviewer,
+            notes=action.notes
+        )
+        
+        return {
+            'success': True,
+            'message': f'Request {request_id} approved',
+            'request': request.to_dict()
+        }
+    except ValueError as e:
+        return {'success': False, 'error': str(e)}
+    except Exception as e:
+        logger.error(f"Failed to approve request: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/risk-committee/approvals/{request_id}/reject")
+async def reject_request(request_id: str, action: ApprovalActionRequest):
+    """Reject a pending approval request."""
+    try:
+        from covenant_service.covenant_service.risk_committee.approval_queue import (
+            get_approval_queue
+        )
+        
+        queue = get_approval_queue()
+        request = queue.reject(
+            request_id=request_id,
+            reviewer=action.reviewer,
+            notes=action.notes
+        )
+        
+        return {
+            'success': True,
+            'message': f'Request {request_id} rejected',
+            'request': request.to_dict()
+        }
+    except ValueError as e:
+        return {'success': False, 'error': str(e)}
+    except Exception as e:
+        logger.error(f"Failed to reject request: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/risk-committee/approvals/history")
+async def get_approval_history(limit: int = 50, loan_id: str = None):
+    """Get approval history with optional filtering."""
+    try:
+        from covenant_service.covenant_service.risk_committee.approval_queue import (
+            get_approval_queue
+        )
+        
+        queue = get_approval_queue()
+        
+        if loan_id:
+            requests = queue.get_by_loan_id(loan_id)
+        else:
+            requests = queue.get_history(limit=limit)
+        
+        return {
+            'success': True,
+            'count': len(requests),
+            'requests': [r.to_dict() for r in requests]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get approval history: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
+
+
 

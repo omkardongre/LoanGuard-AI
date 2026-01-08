@@ -33,6 +33,7 @@ import { MonteCarloCard } from "@/components/monte-carlo-card";
 import { ECLSummaryCard } from "@/components/ecl-summary-card";
 import { WhatIfCard } from "@/components/what-if-card";
 import { ESGFinancialRiskCard } from "@/components/esg-financial-risk-card";
+import { RiskCommitteeCard } from "@/components/risk-committee-card";
 
 // API base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -304,6 +305,7 @@ export default function AnalyticsPage() {
             <TabsTrigger value="sector">Sector Analysis</TabsTrigger>
             <TabsTrigger value="macro">Macro Conditions</TabsTrigger>
             <TabsTrigger value="esg">ESG Climate Risk</TabsTrigger>
+            <TabsTrigger value="committee">AI Committee</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -639,6 +641,63 @@ export default function AnalyticsPage() {
                   <div className="text-xs text-slate-500 p-3 bg-blue-50 rounded-lg">
                     <strong>Regulatory Timeline:</strong> EBA ESG Guidelines effective January 2026. 
                     Banks must integrate ESG factors into credit risk assessment and capital planning.
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* AI Committee Tab */}
+          <TabsContent value="committee">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <RiskCommitteeCard />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Brain className="h-5 w-5 text-purple-600" />
+                    Multi-Agent Credit Decisions
+                  </CardTitle>
+                  <CardDescription>
+                    AI-powered debate-style decision making
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-purple-800 mb-2">5 AI Agents</h4>
+                    <ul className="text-xs text-purple-700 space-y-2">
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-blue-100 text-blue-800 text-[10px]">Credit</Badge>
+                        <span>Credit Risk Assessor - PD/LGD scoring and credit metrics</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 text-[10px]">ESG</Badge>
+                        <span>ESG Risk Agent - Climate and sustainability factors</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-amber-100 text-amber-800 text-[10px]">Market</Badge>
+                        <span>Market Context Agent - Sector and macro analysis</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-red-100 text-red-800 text-[10px]">Devil</Badge>
+                        <span>Devil&apos;s Advocate - Challenges and stress tests</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-purple-100 text-purple-800 text-[10px]">Synth</Badge>
+                        <span>Synthesizer - Final consensus and audit trail</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Regulatory Compliance</h4>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className="bg-purple-600">EU AI Act</Badge>
+                      <Badge className="bg-blue-600">EBA Guidelines</Badge>
+                      <Badge className="bg-emerald-600">IFRS 9</Badge>
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-500 p-3 bg-blue-50 rounded-lg">
+                    <strong>Explainability:</strong> Full audit trail with per-agent reasoning 
+                    for complete transparency per EU AI Act requirements on high-risk AI systems.
                   </div>
                 </CardContent>
               </Card>

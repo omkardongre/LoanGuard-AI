@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
@@ -116,14 +116,27 @@ async def get_dashboard_summary():
         from common.bigquery_client import BigQueryClient
         bq = BigQueryClient()
         
-        # Get loan counts by status
+        # Get loan counts by status (derived from covenant_measurements)
+        # Status logic: RED = any breach, AMBER = any warning (buffer < 20%), GREEN = all compliant
         query = """
+            WITH loan_status AS (
+                SELECT 
+                    l.loan_id,
+                    CASE 
+                        WHEN COUNTIF(m.is_compliant = FALSE) > 0 THEN 'RED'
+                        WHEN COUNTIF(m.buffer_percentage IS NOT NULL AND m.buffer_percentage < 20) > 0 THEN 'AMBER'
+                        ELSE 'GREEN'
+                    END as status
+                FROM `{project}.{dataset}.loans` l
+                LEFT JOIN `{project}.{dataset}.covenant_measurements` m ON l.loan_id = m.loan_id
+                GROUP BY l.loan_id
+            )
             SELECT 
                 COUNT(*) as total,
                 COUNTIF(status = 'GREEN') as compliant,
                 COUNTIF(status = 'AMBER') as warning,
                 COUNTIF(status = 'RED') as breach
-            FROM `{project}.{dataset}.loans`
+            FROM loan_status
         """.format(project=bq.project_id, dataset=bq.dataset_id)
         
         results = bq.execute_query(query)
@@ -140,11 +153,26 @@ async def get_dashboard_summary():
         alert_query = """
             SELECT COUNT(*) as count
             FROM `{project}.{dataset}.alerts`
-            WHERE is_acknowledged = FALSE
+            WHERE acknowledged = FALSE
         """.format(project=bq.project_id, dataset=bq.dataset_id)
         
         alert_results = bq.execute_query(alert_query)
         active_alerts = alert_results[0].get("count", 0) if alert_results else 0
+        
+        # Calculate real ESG average score from esg_kpis table
+        esg_query = """
+            SELECT 
+                ROUND(AVG(CASE 
+                    WHEN target_value > 0 THEN (current_value / target_value) * 100 
+                    ELSE 0 
+                END), 1) as avg_esg_score
+            FROM `{project}.{dataset}.esg_kpis`
+        """.format(project=bq.project_id, dataset=bq.dataset_id)
+        
+        esg_results = bq.execute_query(esg_query)
+        esg_average_score = float(esg_results[0].get("avg_esg_score", 0)) if esg_results and esg_results[0].get("avg_esg_score") else 0.0
+        # Cap at 100 for display purposes (scores > 100 mean targets exceeded)
+        esg_average_score = min(esg_average_score, 100.0)
         
         return DashboardSummary(
             total_loans=total,
@@ -152,7 +180,7 @@ async def get_dashboard_summary():
             loans_warning=warning,
             loans_breach=breach,
             active_alerts=active_alerts,
-            esg_average_score=72.5,  # Calculate from ESG data if needed
+            esg_average_score=esg_average_score,
         )
     except Exception as e:
         logger.error(f"Dashboard query failed: {e}")
@@ -171,15 +199,25 @@ async def list_loans(
         from common.bigquery_client import BigQueryClient
         bq = BigQueryClient()
         
-        # Build query with optional status filter
-        where_clause = f"WHERE status = '{status}'" if status else ""
-        
+        # Query loans with derived status from covenant_measurements
         query = f"""
-            SELECT 
-                loan_id, borrower_name, borrower_industry, facility_amount,
-                currency, maturity_date, loan_type, is_sll, agent_bank, status
-            FROM `{bq.project_id}.{bq.dataset_id}.loans`
-            {where_clause}
+            WITH loan_with_status AS (
+                SELECT 
+                    l.loan_id, l.borrower_name, l.industry, l.facility_amount,
+                    l.currency, l.maturity_date, l.loan_type, l.is_sll, l.agent_bank, l.created_at,
+                    CASE 
+                        WHEN COUNTIF(m.is_compliant = FALSE) > 0 THEN 'RED'
+                        WHEN COUNTIF(m.buffer_percentage IS NOT NULL AND m.buffer_percentage < 20) > 0 THEN 'AMBER'
+                        ELSE 'GREEN'
+                    END as status
+                FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                LEFT JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
+                GROUP BY l.loan_id, l.borrower_name, l.industry, l.facility_amount,
+                         l.currency, l.maturity_date, l.loan_type, l.is_sll, l.agent_bank, l.created_at
+            )
+            SELECT *
+            FROM loan_with_status
+            {"WHERE status = '" + status + "'" if status else ""}
             ORDER BY created_at DESC
             LIMIT {limit} OFFSET {offset}
         """
@@ -188,9 +226,21 @@ async def list_loans(
         
         # Get total count
         count_query = f"""
+            WITH loan_with_status AS (
+                SELECT 
+                    l.loan_id,
+                    CASE 
+                        WHEN COUNTIF(m.is_compliant = FALSE) > 0 THEN 'RED'
+                        WHEN COUNTIF(m.buffer_percentage IS NOT NULL AND m.buffer_percentage < 20) > 0 THEN 'AMBER'
+                        ELSE 'GREEN'
+                    END as status
+                FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                LEFT JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
+                GROUP BY l.loan_id
+            )
             SELECT COUNT(*) as total
-            FROM `{bq.project_id}.{bq.dataset_id}.loans`
-            {where_clause}
+            FROM loan_with_status
+            {"WHERE status = '" + status + "'" if status else ""}
         """
         count_result = bq.execute_query(count_query)
         total = count_result[0].get("total", 0) if count_result else 0
@@ -258,45 +308,99 @@ async def upload_document(
 
 @app.get("/api/documents/{document_id}")
 async def get_document(document_id: str):
-    """Get document processing status and results."""
-    return {
-        "document_id": document_id,
-        "status": "completed",
-        "extracted_covenants": [
-            {"name": "Debt/EBITDA", "threshold": "<=4.0x", "type": "financial"},
-            {"name": "Interest Coverage", "threshold": ">=2.5x", "type": "financial"},
-        ],
-        "extracted_entities": {
-            "borrower": "Acme Corporation",
-            "agent": "JPMorgan Chase",
-            "facility_amount": "$150,000,000",
-        },
-    }
+    """Get document processing status and results from BigQuery."""
+    try:
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        # Query real document extraction data
+        query = f"""
+            SELECT 
+                extraction_id as document_id,
+                document_filename,
+                extraction_source,
+                extraction_confidence,
+                borrower_name,
+                lender_name,
+                loan_amount,
+                currency,
+                maturity_date,
+                interest_rate,
+                covenants_json,
+                created_at as processed_at
+            FROM `{bq.project_id}.{bq.dataset_id}.document_extractions`
+            WHERE extraction_id = '{document_id}'
+        """
+        
+        results = bq.execute_query(query)
+        
+        if not results:
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
+        
+        doc = results[0]
+        
+        # Parse covenants JSON if present
+        covenants = []
+        if doc.get("covenants_json"):
+            import json
+            try:
+                covenants = json.loads(doc.get("covenants_json", "[]"))
+            except json.JSONDecodeError:
+                covenants = []
+        
+        return {
+            "document_id": doc.get("document_id"),
+            "status": "completed",
+            "filename": doc.get("document_filename"),
+            "extraction_source": doc.get("extraction_source", "Affinda"),
+            "extraction_confidence": doc.get("extraction_confidence"),
+            "extracted_covenants": covenants,
+            "extracted_entities": {
+                "borrower": doc.get("borrower_name"),
+                "lender": doc.get("lender_name"),
+                "facility_amount": f"${doc.get('loan_amount', 0):,.0f}" if doc.get("loan_amount") else None,
+                "currency": doc.get("currency"),
+                "maturity_date": str(doc.get("maturity_date")) if doc.get("maturity_date") else None,
+                "interest_rate": doc.get("interest_rate"),
+            },
+            "processed_at": str(doc.get("processed_at")) if doc.get("processed_at") else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Document query failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
 # Covenant endpoints
 @app.get("/api/covenants/{loan_id}", response_model=CovenantStatusResponse)
 async def get_covenant_status(loan_id: str):
-    """Get covenant compliance status for a loan."""
+    """Get covenant compliance status for a loan with real ML predictions."""
     try:
         from common.bigquery_client import BigQueryClient
         bq = BigQueryClient()
         
-        # Get covenants with latest measurements
+        # Get covenants with latest measurements including ML predictions
         query = f"""
             SELECT 
                 c.covenant_id,
                 c.covenant_name as name,
                 c.covenant_type,
-                c.threshold,
+                c.threshold_value as threshold,
                 c.threshold_type,
                 m.actual_value as actual,
-                m.status,
-                m.buffer_percent as buffer_pct
+                CASE 
+                    WHEN m.is_compliant = FALSE THEN 'RED'
+                    WHEN m.buffer_percentage IS NOT NULL AND m.buffer_percentage < 20 THEN 'AMBER'
+                    ELSE 'GREEN'
+                END as status,
+                m.buffer_percentage as buffer_pct,
+                m.predicted_breach_probability
             FROM `{bq.project_id}.{bq.dataset_id}.covenants` c
             LEFT JOIN (
-                SELECT covenant_id, actual_value, status, buffer_percent,
-                    ROW_NUMBER() OVER(PARTITION BY covenant_id ORDER BY period_date DESC) as rn
+                SELECT covenant_id, actual_value, is_compliant, buffer_percentage, 
+                       predicted_breach_probability,
+                    ROW_NUMBER() OVER(PARTITION BY covenant_id ORDER BY measurement_date DESC) as rn
                 FROM `{bq.project_id}.{bq.dataset_id}.covenant_measurements`
             ) m ON c.covenant_id = m.covenant_id AND m.rn = 1
             WHERE c.loan_id = '{loan_id}'
@@ -313,13 +417,40 @@ async def get_covenant_status(loan_id: str):
         else:
             overall_status = "GREEN"
         
+        # Calculate real breach predictions from ML data
+        breach_probabilities = [c.get("predicted_breach_probability") for c in covenants if c.get("predicted_breach_probability") is not None]
+        avg_breach_prob = sum(breach_probabilities) / len(breach_probabilities) if breach_probabilities else 0.0
+        max_breach_prob = max(breach_probabilities) if breach_probabilities else 0.0
+        
+        # Get top risk factors - covenants with lowest buffer or highest breach probability
+        risk_covenants = sorted(
+            [c for c in covenants if c.get("buffer_pct") is not None or c.get("predicted_breach_probability") is not None],
+            key=lambda x: (x.get("predicted_breach_probability") or 0, -(x.get("buffer_pct") or 100)),
+            reverse=True
+        )[:3]
+        
+        top_risk_factors = []
+        for cov in risk_covenants:
+            if cov.get("buffer_pct") is not None and cov.get("buffer_pct") < 30:
+                top_risk_factors.append(f"{cov.get('name')} - Buffer at {cov.get('buffer_pct'):.1f}%")
+            elif cov.get("predicted_breach_probability") and cov.get("predicted_breach_probability") > 0.3:
+                top_risk_factors.append(f"{cov.get('name')} - {cov.get('predicted_breach_probability')*100:.0f}% breach risk")
+        
+        # Default risk factors if none found
+        if not top_risk_factors and overall_status != "GREEN":
+            top_risk_factors = ["Non-compliance detected", "Review financial metrics"]
+        elif not top_risk_factors:
+            top_risk_factors = ["All covenants within safe thresholds"]
+        
         return CovenantStatusResponse(
             loan_id=loan_id,
             overall_status=overall_status,
             covenants=covenants,
             breach_predictions={
-                "90_day_probability": 0.25,
-                "top_risk_factors": ["Declining EBITDA", "Rising debt levels"],
+                "90_day_probability": round(max_breach_prob, 4),
+                "average_probability": round(avg_breach_prob, 4),
+                "top_risk_factors": top_risk_factors,
+                "source": "ML Model (LightGBM)" if breach_probabilities else "Rule-based assessment",
             },
         )
     except Exception as e:
@@ -437,13 +568,13 @@ async def get_portfolio_concentration():
         # Get industry concentration
         query = f"""
             SELECT 
-                borrower_industry as category,
-                borrower_industry as value,
+                industry as category,
+                industry as value,
                 SUM(facility_amount) as exposure,
                 COUNT(*) as loan_count
             FROM `{bq.project_id}.{bq.dataset_id}.loans`
-            WHERE borrower_industry IS NOT NULL
-            GROUP BY borrower_industry
+            WHERE industry IS NOT NULL
+            GROUP BY industry
             ORDER BY exposure DESC
         """
         concentrations = bq.execute_query(query)
@@ -578,14 +709,14 @@ async def list_alerts(
         if severity:
             conditions.append(f"severity = '{severity}'")
         if acknowledged is not None:
-            conditions.append(f"is_acknowledged = {str(acknowledged).upper()}")
+            conditions.append(f"acknowledged = {str(acknowledged).upper()}")
         
         where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
         
         query = f"""
             SELECT 
                 alert_id, loan_id, alert_type as type, severity,
-                title, message, is_acknowledged as acknowledged, created_at
+                message, acknowledged, created_at, recommended_action
             FROM `{bq.project_id}.{bq.dataset_id}.alerts`
             {where_clause}
             ORDER BY created_at DESC
@@ -613,32 +744,183 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat_with_agent(request: ChatRequest):
-    """Chat with LoanGuard AI agent powered by Gemini."""
+    """Chat with LoanGuard AI agent powered by Gemini with real BigQuery data."""
     try:
         import os
-        import google.generativeai as genai
+        import re
+        from google import genai
+        from common.bigquery_client import BigQueryClient
         
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        bq = BigQueryClient()
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         
-        # Build context
-        system_prompt = """You are LoanGuard AI, an expert assistant for loan covenant and ESG compliance monitoring.
-You help loan portfolio managers with:
-- Covenant compliance monitoring and breach prediction
-- ESG and sustainability-linked loan (SLL) tracking  
-- Greenwashing detection and risk assessment
-- Risk velocity analysis and cure options
+        # Extract loan ID from message if present (e.g., LOAN-0001, LOAN-025)
+        loan_id_match = re.search(r'LOAN-\d+', request.message.upper())
+        detected_loan_id = loan_id_match.group(0) if loan_id_match else request.loan_id
+        
+        # Detect query type
+        message_lower = request.message.lower()
+        is_breach_query = any(term in message_lower for term in ['risk', 'breach', 'at risk', 'warning', 'critical'])
+        is_esg_query = any(term in message_lower for term in ['esg', 'sustainability', 'environmental', 'green'])
+        
+        # Build real data context from BigQuery
+        data_context = ""
+        
+        if detected_loan_id:
+            # Get loan details
+            loan_query = f"""
+                SELECT loan_id, borrower_name, industry, facility_amount, currency, 
+                       maturity_date, loan_type, is_sll, agent_bank
+                FROM `{bq.project_id}.{bq.dataset_id}.loans`
+                WHERE loan_id = '{detected_loan_id}'
+            """
+            loan_data = bq.execute_query(loan_query)
+            
+            if loan_data:
+                loan = loan_data[0]
+                data_context += f"""
+📋 LOAN DATA FOR {detected_loan_id}:
+- 🏢 Borrower: {loan.get('borrower_name')}
+- 🏭 Industry: {loan.get('industry')}
+- 💰 Facility Amount: ${loan.get('facility_amount', 0)/1000000:.1f}M {loan.get('currency', 'USD')}
+- 📅 Maturity Date: {loan.get('maturity_date')}
+- 📝 Loan Type: {loan.get('loan_type')}
+- 🌱 Is SLL: {'Yes' if loan.get('is_sll', False) else 'No'}
+- 🏦 Agent Bank: {loan.get('agent_bank')}
+"""
+                
+                # Get ESG KPIs for this loan
+                esg_query = f"""
+                    SELECT kpi_name, kpi_type, current_value, target_value, unit,
+                           verification_status, greenwashing_risk_score
+                    FROM `{bq.project_id}.{bq.dataset_id}.esg_kpis`
+                    WHERE loan_id = '{detected_loan_id}'
+                """
+                esg_data = bq.execute_query(esg_query)
+                
+                if esg_data:
+                    data_context += f"\n🌱 ESG KPIs ({len(esg_data)} targets):\n"
+                    for esg in esg_data:
+                        progress = (esg.get('current_value', 0) / esg.get('target_value', 1) * 100) if esg.get('target_value') else 0
+                        status_emoji = "✅" if progress >= 80 else "⚠️" if progress >= 50 else "🔴"
+                        status = "On Track" if progress >= 80 else "At Risk" if progress >= 50 else "Behind"
+                        data_context += f"{status_emoji} {esg.get('kpi_name')}: {progress:.0f}% ({status})\n"
+                
+                # Get covenant measurements
+                covenant_query = f"""
+                    SELECT c.covenant_name, c.covenant_type, m.actual_value, c.threshold_value,
+                           m.is_compliant, m.buffer_percentage, m.predicted_breach_probability
+                    FROM `{bq.project_id}.{bq.dataset_id}.covenants` c
+                    JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON c.covenant_id = m.covenant_id
+                    WHERE c.loan_id = '{detected_loan_id}'
+                    ORDER BY m.measurement_date DESC
+                    LIMIT 10
+                """
+                covenant_data = bq.execute_query(covenant_query)
+                
+                if covenant_data:
+                    data_context += f"\n📊 COVENANT STATUS ({len(covenant_data)} measurements):\n"
+                    for cov in covenant_data:
+                        status_emoji = "✅" if cov.get('is_compliant') else "🔴"
+                        status = "Compliant" if cov.get('is_compliant') else "BREACH"
+                        breach_prob = cov.get('predicted_breach_probability', 0) or 0
+                        data_context += f"{status_emoji} {cov.get('covenant_name')}: {status} ({breach_prob*100:.0f}% risk)\n"
+        else:
+            # Portfolio-level queries - get comprehensive summary
+            
+            # Get portfolio summary
+            summary_query = f"""
+                SELECT COUNT(*) as total_loans,
+                       ROUND(SUM(facility_amount)/1000000000, 2) as total_exposure_billions
+                FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            """
+            summary = bq.execute_query(summary_query)
+            if summary:
+                data_context = f"📊 PORTFOLIO SUMMARY:\n- Total Loans: {summary[0].get('total_loans')}\n- Total Exposure: ${summary[0].get('total_exposure_billions')}B\n"
+            
+            # For breach queries, get actual loans at risk with TOTAL COUNT
+            if is_breach_query:
+                # First get total count of loans at risk
+                count_query = f"""
+                    SELECT COUNT(*) as total_at_risk
+                    FROM (
+                        SELECT l.loan_id
+                        FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                        JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
+                        GROUP BY l.loan_id
+                        HAVING COUNTIF(m.is_compliant = FALSE) > 0 OR MAX(m.predicted_breach_probability) > 0.5
+                    )
+                """
+                count_result = bq.execute_query(count_query)
+                total_at_risk = count_result[0].get('total_at_risk', 0) if count_result else 0
+                
+                # Get top 10 for display
+                breach_query = f"""
+                    WITH loan_risk AS (
+                        SELECT 
+                            l.loan_id, l.borrower_name, l.facility_amount,
+                            COUNTIF(m.is_compliant = FALSE) as breach_count,
+                            MAX(m.predicted_breach_probability) as max_breach_prob
+                        FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                        JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
+                        GROUP BY l.loan_id, l.borrower_name, l.facility_amount
+                        HAVING breach_count > 0 OR max_breach_prob > 0.5
+                    )
+                    SELECT loan_id, borrower_name, 
+                           ROUND(facility_amount/1000000, 1) as amount_millions,
+                           breach_count, ROUND(max_breach_prob * 100, 0) as breach_probability
+                    FROM loan_risk
+                    ORDER BY breach_count DESC, max_breach_prob DESC
+                    LIMIT 10
+                """
+                breach_data = bq.execute_query(breach_query)
+                
+                if breach_data:
+                    data_context += f"\n⚠️ LOANS AT RISK: {total_at_risk} total (showing top 10):\n"
+                    for loan in breach_data:
+                        data_context += f"🔴 {loan.get('loan_id')} ({loan.get('borrower_name')}): ${loan.get('amount_millions')}M, {loan.get('breach_count')} breaches, {loan.get('breach_probability')}% risk\n"
+            
+            # For ESG queries, get portfolio ESG summary
+            if is_esg_query:
+                esg_summary_query = f"""
+                    SELECT 
+                        COUNT(*) as total_kpis,
+                        ROUND(AVG(CASE WHEN target_value > 0 THEN (current_value / target_value) * 100 ELSE 0 END), 1) as avg_progress,
+                        COUNTIF(CASE WHEN target_value > 0 THEN (current_value / target_value) >= 0.8 ELSE FALSE END) as on_track_count
+                    FROM `{bq.project_id}.{bq.dataset_id}.esg_kpis`
+                """
+                esg_summary = bq.execute_query(esg_summary_query)
+                
+                if esg_summary and esg_summary[0]:
+                    s = esg_summary[0]
+                    on_track_pct = round((s.get('on_track_count', 0) / s.get('total_kpis', 1)) * 100) if s.get('total_kpis') else 0
+                    data_context += f"\n🌱 ESG PORTFOLIO STATUS:\n"
+                    data_context += f"- Total KPIs tracked: {s.get('total_kpis')}\n"
+                    data_context += f"- Average progress: {s.get('avg_progress')}%\n"
+                    data_context += f"- KPIs on track: {on_track_pct}% ({'✅ Excellent' if on_track_pct >= 80 else '⚠️ Needs Attention'})\n"
+        
+        # Build enhanced prompt with real data - modern 2025 chat formatting
+        system_prompt = f"""You are LoanGuard AI, a friendly and professional assistant for loan covenant and ESG compliance monitoring.
+You have access to REAL DATA from the LoanGuard database. Use this data to provide specific, accurate answers.
 
-Be concise, professional, and actionable. When discussing specific loans, always reference the loan_id."""
+REAL DATA FROM DATABASE:
+{data_context}
+
+MODERN FORMATTING RULES (2025 Chat Style):
+- Use emojis to make responses visually appealing: 📊 for data, ⚠️ for warnings, ✅ for success, 🔴 for critical, 💰 for money, 📈 for trends
+- Use **bold** for important numbers, loan IDs, and key terms
+- Start with a brief summary line
+- Use clear section headers when listing multiple items
+- Keep responses concise but informative
+- Always cite the EXACT loan IDs and numbers from the data above
+- If showing a list, limit to top 5 items unless user asks for more
+- End with a helpful follow-up suggestion when appropriate"""
         
-        user_context = request.message
-        if request.loan_id:
-            user_context = f"[Context: Loan {request.loan_id}]\n\n{request.message}"
-        
-        response = model.generate_content(
-            [system_prompt, user_context],
-            generation_config={
-                "temperature": 0.7,
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"{system_prompt}\n\nUser Question: {request.message}",
+            config={
+                "temperature": 0.3,
                 "max_output_tokens": 1024,
             },
         )
@@ -650,6 +932,8 @@ Be concise, professional, and actionable. When discussing specific loans, always
                 "What is the ESG status?",
                 "Calculate cure options",
             ],
+            "data_context_used": bool(data_context),
+            "detected_loan_id": detected_loan_id,
         }
     except Exception as e:
         logger.error(f"Chat failed: {e}")
@@ -835,8 +1119,20 @@ async def get_portfolio_velocity():
         from common.bigquery_client import BigQueryClient
         bq = BigQueryClient()
         
-        # Get risk distribution from loans
+        # Get risk distribution from loans (derived from covenant_measurements)
         query = f"""
+            WITH loan_status AS (
+                SELECT 
+                    l.loan_id,
+                    CASE 
+                        WHEN COUNTIF(m.is_compliant = FALSE) > 0 THEN 'RED'
+                        WHEN COUNTIF(m.buffer_percentage IS NOT NULL AND m.buffer_percentage < 20) > 0 THEN 'AMBER'
+                        ELSE 'GREEN'
+                    END as status
+                FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                LEFT JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
+                GROUP BY l.loan_id
+            )
             SELECT 
                 CASE 
                     WHEN status = 'RED' THEN 'CRITICAL'
@@ -844,7 +1140,7 @@ async def get_portfolio_velocity():
                     ELSE 'LOW'
                 END as risk_level,
                 COUNT(*) as count
-            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            FROM loan_status
             GROUP BY risk_level
         """
         results = bq.execute_query(query)
@@ -855,10 +1151,22 @@ async def get_portfolio_velocity():
         
         total = sum(distribution.values())
         
-        # Get worsening loans
+        # Get worsening loans (loans with breaches or warnings)
         worsening_query = f"""
+            WITH loan_status AS (
+                SELECT 
+                    l.loan_id,
+                    CASE 
+                        WHEN COUNTIF(m.is_compliant = FALSE) > 0 THEN 'RED'
+                        WHEN COUNTIF(m.buffer_percentage IS NOT NULL AND m.buffer_percentage < 20) > 0 THEN 'AMBER'
+                        ELSE 'GREEN'
+                    END as status
+                FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                LEFT JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
+                GROUP BY l.loan_id
+            )
             SELECT loan_id, status
-            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            FROM loan_status
             WHERE status IN ('RED', 'AMBER')
             LIMIT 5
         """
@@ -915,7 +1223,7 @@ async def get_loan_greenwashing(loan_id: str):
         
         # Get loan and borrower info
         loan_query = f"""
-            SELECT borrower_name, borrower_industry
+            SELECT borrower_name, industry
             FROM `{bq.project_id}.{bq.dataset_id}.loans`
             WHERE loan_id = '{loan_id}'
         """
@@ -1208,7 +1516,7 @@ async def generate_portfolio_pdf_report():
         alert_query = f"""
             SELECT COUNT(*) as active_alerts
             FROM `{bq.project_id}.{bq.dataset_id}.alerts`
-            WHERE is_acknowledged = FALSE
+            WHERE acknowledged = FALSE
         """
         alert_results = bq.execute_query(alert_query)
         summary["active_alerts"] = alert_results[0].get("active_alerts", 0) if alert_results else 0
@@ -1226,12 +1534,12 @@ async def generate_portfolio_pdf_report():
         # Get concentration
         conc_query = f"""
             SELECT 
-                borrower_industry as category,
+                industry as category,
                 SUM(facility_amount) as exposure,
                 COUNT(*) as loan_count
             FROM `{bq.project_id}.{bq.dataset_id}.loans`
-            WHERE borrower_industry IS NOT NULL
-            GROUP BY borrower_industry
+            WHERE industry IS NOT NULL
+            GROUP BY industry
             ORDER BY exposure DESC
         """
         concentrations = bq.execute_query(conc_query)
@@ -1748,7 +2056,7 @@ async def get_loan_esg_risk(loan_id: str):
         seed = hash(loan_id) % (2**32)
         rng = np.random.RandomState(seed)
         
-        industry = loan.get('borrower_industry', loan.get('industry', 'Technology'))
+        industry = loan.get('industry', loan.get('industry', 'Technology'))
         is_sll = loan.get('is_sll', False)
         
         # SLL loans typically have better ESG focus (regulatory requirement)
@@ -1834,7 +2142,7 @@ async def explain_esg_risk(loan_id: str):
         seed = hash(loan_id) % (2**32)
         rng = np.random.RandomState(seed)
         
-        industry = loan.get('borrower_industry', loan.get('industry', 'Technology'))
+        industry = loan.get('industry', loan.get('industry', 'Technology'))
         is_sll = loan.get('is_sll', False)
         base_score = 65 if is_sll else 50
         

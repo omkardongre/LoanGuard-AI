@@ -8,6 +8,7 @@ This service exposes the HERO feature: Greenwashing Detection.
 """
 
 from typing import Optional, Dict, Any, List
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Path
 from pydantic import BaseModel, Field
 import logging
@@ -692,24 +693,84 @@ async def get_loan_news_validation(
     """
     Get news-based validation for a loan's ESG claims.
     
-    Combines greenwashing detection with news coverage analysis.
+    Fetches borrower info from BigQuery and validates ESG claims against news.
     """
     try:
-        # This would normally fetch borrower info from BigQuery
-        # For now, return a placeholder that demonstrates the endpoint
+        from common.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        
+        # Get loan and borrower info from BigQuery
+        loan_query = f"""
+            SELECT l.loan_id, l.borrower_name, l.industry
+            FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+            WHERE l.loan_id = '{loan_id}'
+        """
+        loan_data = bq.execute_query(loan_query)
+        
+        if not loan_data:
+            raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+        
+        loan = loan_data[0]
+        borrower_name = loan.get("borrower_name")
+        
+        # Get ESG claims for this loan
+        claims_query = f"""
+            SELECT kpi_name, kpi_type, current_value, target_value, 
+                   verification_status, greenwashing_risk_score
+            FROM `{bq.project_id}.{bq.dataset_id}.esg_kpis`
+            WHERE loan_id = '{loan_id}'
+        """
+        claims_data = bq.execute_query(claims_query)
+        
         validator = get_news_validator()
+        
+        # Validate each major ESG claim
+        validations = []
+        for claim in claims_data[:3]:  # Limit to top 3 claims to avoid rate limiting
+            if borrower_name and claim.get("kpi_name"):
+                claim_text = f"{claim.get('kpi_name')} target of {claim.get('target_value')} {claim.get('kpi_type', '')}"
+                try:
+                    validation_result = validate_company_claim(
+                        company_name=borrower_name,
+                        claim_text=claim_text,
+                        days_back=days_back,
+                    )
+                    validations.append({
+                        "kpi_name": claim.get("kpi_name"),
+                        "claim": claim_text,
+                        "validation": validation_result,
+                    })
+                except Exception as ve:
+                    validations.append({
+                        "kpi_name": claim.get("kpi_name"),
+                        "claim": claim_text,
+                        "validation": {"error": str(ve), "credibility": "UNABLE_TO_VERIFY"},
+                    })
+        
+        # Get recent controversies for the borrower
+        controversies = {}
+        if borrower_name:
+            try:
+                controversies = get_company_controversies(
+                    company_name=borrower_name,
+                    days_back=days_back,
+                )
+            except Exception:
+                controversies = {"error": "Unable to fetch controversies"}
         
         return {
             "success": True,
             "loan_id": loan_id,
+            "borrower_name": borrower_name,
+            "industry": loan.get("industry"),
             "news_validation_available": validator.available,
-            "message": "Provide borrower ESG claims for full validation",
-            "usage": {
-                "endpoint": "/api/esg/news/validate",
-                "method": "POST",
-                "required_fields": ["company_name", "claim_text"],
-            }
+            "esg_claims_count": len(claims_data),
+            "validations": validations,
+            "controversies": controversies,
+            "analysis_date": datetime.now().isoformat() if 'datetime' in dir() else None,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Loan news validation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

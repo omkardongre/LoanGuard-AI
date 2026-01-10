@@ -737,9 +737,14 @@ async def acknowledge_alert(alert_id: str):
 
 
 # Chat endpoint for agent interaction
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
 class ChatRequest(BaseModel):
     message: str
     loan_id: Optional[str] = None
+    history: Optional[List[ChatMessage]] = None  # Conversation history for context
 
 
 @app.post("/api/chat")
@@ -826,9 +831,17 @@ async def chat_with_agent(request: ChatRequest):
                         breach_prob = cov.get('predicted_breach_probability', 0) or 0
                         data_context += f"{status_emoji} {cov.get('covenant_name')}: {status} ({breach_prob*100:.0f}% risk)\n"
         else:
-            # Portfolio-level queries - get comprehensive summary
+            # Portfolio-level queries - get comprehensive data based on query type
+            message_lower = request.message.lower()
             
-            # Get portfolio summary
+            # Detect additional query types
+            is_sector_query = any(term in message_lower for term in ['sector', 'industry', 'energy', 'technology', 'healthcare', 'financial', 'manufacturing'])
+            is_maturity_query = any(term in message_lower for term in ['maturity', 'maturing', 'expire', 'expiring', 'due', 'upcoming'])
+            is_concentration_query = any(term in message_lower for term in ['concentration', 'largest', 'biggest', 'top exposure', 'top loans'])
+            is_headroom_query = any(term in message_lower for term in ['headroom', 'buffer', 'margin', 'cushion', 'threshold'])
+            is_sll_query = any(term in message_lower for term in ['sll', 'sustainability-linked', 'sustainability linked', 'green loan'])
+            
+            # Get portfolio summary - ALWAYS
             summary_query = f"""
                 SELECT COUNT(*) as total_loans,
                        ROUND(SUM(facility_amount)/1000000000, 2) as total_exposure_billions
@@ -837,6 +850,136 @@ async def chat_with_agent(request: ChatRequest):
             summary = bq.execute_query(summary_query)
             if summary:
                 data_context = f"📊 PORTFOLIO SUMMARY:\n- Total Loans: {summary[0].get('total_loans')}\n- Total Exposure: ${summary[0].get('total_exposure_billions')}B\n"
+            
+            # SECTOR/INDUSTRY QUERY - Get loans by industry
+            if is_sector_query:
+                industry_query = f"""
+                    SELECT industry, COUNT(*) as loan_count, 
+                           ROUND(SUM(facility_amount)/1000000, 1) as total_exposure_millions,
+                           STRING_AGG(CONCAT(loan_id, ' (', borrower_name, ')'), ', ' LIMIT 3) as sample_loans
+                    FROM `{bq.project_id}.{bq.dataset_id}.loans`
+                    WHERE industry IS NOT NULL
+                    GROUP BY industry
+                    ORDER BY total_exposure_millions DESC
+                    LIMIT 10
+                """
+                industry_data = bq.execute_query(industry_query)
+                
+                if industry_data:
+                    data_context += f"\n🏭 INDUSTRY/SECTOR BREAKDOWN:\n"
+                    for ind in industry_data:
+                        data_context += f"- {ind.get('industry')}: {ind.get('loan_count')} loans, ${ind.get('total_exposure_millions')}M\n"
+                        data_context += f"  Sample loans: {ind.get('sample_loans')}\n"
+                
+                # Get loans with covenant issues by industry
+                sector_breach_query = f"""
+                    SELECT l.industry, l.loan_id, l.borrower_name, 
+                           ROUND(l.facility_amount/1000000, 1) as amount_millions,
+                           COUNTIF(m.is_compliant = FALSE) as breach_count
+                    FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                    JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
+                    WHERE l.industry IS NOT NULL
+                    GROUP BY l.industry, l.loan_id, l.borrower_name, l.facility_amount
+                    HAVING breach_count > 0
+                    ORDER BY breach_count DESC
+                    LIMIT 10
+                """
+                sector_breach_data = bq.execute_query(sector_breach_query)
+                
+                if sector_breach_data:
+                    data_context += f"\n⚠️ LOANS WITH COVENANT ISSUES BY SECTOR:\n"
+                    for loan in sector_breach_data:
+                        data_context += f"🔴 {loan.get('industry')} - {loan.get('loan_id')} ({loan.get('borrower_name')}): ${loan.get('amount_millions')}M, {loan.get('breach_count')} breaches\n"
+            
+            # MATURITY QUERY - Get upcoming maturities  
+            if is_maturity_query:
+                maturity_query = f"""
+                    SELECT loan_id, borrower_name, maturity_date,
+                           ROUND(facility_amount/1000000, 1) as amount_millions,
+                           DATE_DIFF(maturity_date, CURRENT_DATE(), DAY) as days_to_maturity
+                    FROM `{bq.project_id}.{bq.dataset_id}.loans`
+                    WHERE maturity_date IS NOT NULL
+                    ORDER BY maturity_date ASC
+                    LIMIT 15
+                """
+                maturity_data = bq.execute_query(maturity_query)
+                
+                if maturity_data:
+                    # Group by timeframe
+                    within_90 = [m for m in maturity_data if m.get('days_to_maturity') and m.get('days_to_maturity') <= 90]
+                    within_180 = [m for m in maturity_data if m.get('days_to_maturity') and 90 < m.get('days_to_maturity') <= 180]
+                    
+                    data_context += f"\n📅 UPCOMING LOAN MATURITIES:\n"
+                    if within_90:
+                        data_context += f"⚠️ Within 90 days ({len(within_90)} loans):\n"
+                        for m in within_90[:5]:
+                            data_context += f"  - {m.get('loan_id')} ({m.get('borrower_name')}): {m.get('maturity_date')}, ${m.get('amount_millions')}M, {m.get('days_to_maturity')} days\n"
+                    if within_180:
+                        data_context += f"📋 90-180 days ({len(within_180)} loans):\n"
+                        for m in within_180[:5]:
+                            data_context += f"  - {m.get('loan_id')} ({m.get('borrower_name')}): {m.get('maturity_date')}, ${m.get('amount_millions')}M\n"
+            
+            # CONCENTRATION QUERY - Top loans by exposure
+            if is_concentration_query:
+                concentration_query = f"""
+                    SELECT loan_id, borrower_name, industry,
+                           ROUND(facility_amount/1000000, 1) as amount_millions,
+                           ROUND(facility_amount / (SELECT SUM(facility_amount) FROM `{bq.project_id}.{bq.dataset_id}.loans`) * 100, 2) as portfolio_pct
+                    FROM `{bq.project_id}.{bq.dataset_id}.loans`
+                    ORDER BY facility_amount DESC
+                    LIMIT 10
+                """
+                concentration_data = bq.execute_query(concentration_query)
+                
+                if concentration_data:
+                    data_context += f"\n💰 TOP 10 LOANS BY EXPOSURE (Concentration Risk):\n"
+                    for i, loan in enumerate(concentration_data, 1):
+                        data_context += f"{i}. {loan.get('loan_id')} ({loan.get('borrower_name')}): ${loan.get('amount_millions')}M ({loan.get('portfolio_pct')}% of portfolio) - {loan.get('industry')}\n"
+            
+            # HEADROOM/BUFFER QUERY - Covenant headroom analysis
+            if is_headroom_query:
+                headroom_query = f"""
+                    SELECT l.loan_id, l.borrower_name, c.covenant_name,
+                           m.buffer_percentage, m.is_compliant,
+                           ROUND(l.facility_amount/1000000, 1) as amount_millions
+                    FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                    JOIN `{bq.project_id}.{bq.dataset_id}.covenants` c ON l.loan_id = c.loan_id
+                    JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON c.covenant_id = m.covenant_id
+                    WHERE m.buffer_percentage IS NOT NULL
+                    ORDER BY m.buffer_percentage ASC
+                    LIMIT 15
+                """
+                headroom_data = bq.execute_query(headroom_query)
+                
+                if headroom_data:
+                    data_context += f"\n📏 COVENANT HEADROOM (Lowest buffers first):\n"
+                    for h in headroom_data:
+                        status = "✅" if h.get('is_compliant') else "🔴"
+                        buffer = h.get('buffer_percentage', 0) or 0
+                        data_context += f"{status} {h.get('loan_id')} ({h.get('borrower_name')}): {h.get('covenant_name')} - {buffer:.1f}% buffer, ${h.get('amount_millions')}M\n"
+            
+            # SLL/GREEN LOANS QUERY
+            if is_sll_query:
+                sll_query = f"""
+                    SELECT l.loan_id, l.borrower_name, l.industry,
+                           ROUND(l.facility_amount/1000000, 1) as amount_millions,
+                           COUNT(e.kpi_id) as kpi_count,
+                           ROUND(AVG(CASE WHEN e.target_value > 0 THEN (e.current_value / e.target_value) * 100 ELSE 0 END), 1) as avg_progress
+                    FROM `{bq.project_id}.{bq.dataset_id}.loans` l
+                    LEFT JOIN `{bq.project_id}.{bq.dataset_id}.esg_kpis` e ON l.loan_id = e.loan_id
+                    WHERE l.is_sll = TRUE
+                    GROUP BY l.loan_id, l.borrower_name, l.industry, l.facility_amount
+                    ORDER BY l.facility_amount DESC
+                    LIMIT 10
+                """
+                sll_data = bq.execute_query(sll_query)
+                
+                if sll_data:
+                    data_context += f"\n🌱 SUSTAINABILITY-LINKED LOANS (SLL):\n"
+                    for loan in sll_data:
+                        progress = loan.get('avg_progress', 0) or 0
+                        status = "✅" if progress >= 80 else "⚠️" if progress >= 50 else "🔴"
+                        data_context += f"{status} {loan.get('loan_id')} ({loan.get('borrower_name')}): ${loan.get('amount_millions')}M, {loan.get('kpi_count')} KPIs, {progress:.0f}% progress\n"
             
             # For breach queries, get actual loans at risk with TOTAL COUNT
             if is_breach_query:
@@ -858,15 +1001,15 @@ async def chat_with_agent(request: ChatRequest):
                 breach_query = f"""
                     WITH loan_risk AS (
                         SELECT 
-                            l.loan_id, l.borrower_name, l.facility_amount,
+                            l.loan_id, l.borrower_name, l.facility_amount, l.industry,
                             COUNTIF(m.is_compliant = FALSE) as breach_count,
                             MAX(m.predicted_breach_probability) as max_breach_prob
                         FROM `{bq.project_id}.{bq.dataset_id}.loans` l
                         JOIN `{bq.project_id}.{bq.dataset_id}.covenant_measurements` m ON l.loan_id = m.loan_id
-                        GROUP BY l.loan_id, l.borrower_name, l.facility_amount
+                        GROUP BY l.loan_id, l.borrower_name, l.facility_amount, l.industry
                         HAVING breach_count > 0 OR max_breach_prob > 0.5
                     )
-                    SELECT loan_id, borrower_name, 
+                    SELECT loan_id, borrower_name, industry,
                            ROUND(facility_amount/1000000, 1) as amount_millions,
                            breach_count, ROUND(max_breach_prob * 100, 0) as breach_probability
                     FROM loan_risk
@@ -878,7 +1021,7 @@ async def chat_with_agent(request: ChatRequest):
                 if breach_data:
                     data_context += f"\n⚠️ LOANS AT RISK: {total_at_risk} total (showing top 10):\n"
                     for loan in breach_data:
-                        data_context += f"🔴 {loan.get('loan_id')} ({loan.get('borrower_name')}): ${loan.get('amount_millions')}M, {loan.get('breach_count')} breaches, {loan.get('breach_probability')}% risk\n"
+                        data_context += f"🔴 {loan.get('loan_id')} ({loan.get('borrower_name')}): ${loan.get('amount_millions')}M, {loan.get('breach_count')} breaches, {loan.get('breach_probability')}% risk - {loan.get('industry')}\n"
             
             # For ESG queries, get portfolio ESG summary
             if is_esg_query:
@@ -899,12 +1042,38 @@ async def chat_with_agent(request: ChatRequest):
                     data_context += f"- Average progress: {s.get('avg_progress')}%\n"
                     data_context += f"- KPIs on track: {on_track_pct}% ({'✅ Excellent' if on_track_pct >= 80 else '⚠️ Needs Attention'})\n"
         
+        # Build conversation history string for context
+        conversation_history = ""
+        if request.history and len(request.history) > 0:
+            # Include last 10 messages for context (to avoid token limits)
+            recent_history = request.history[-10:]
+            conversation_history = "\n\nCONVERSATION HISTORY:\n"
+            for msg in recent_history:
+                role_label = "User" if msg.role == "user" else "Assistant"
+                conversation_history += f"{role_label}: {msg.content}\n"
+            conversation_history += "\n"
+        
         # Build enhanced prompt with real data - modern 2025 chat formatting
         system_prompt = f"""You are LoanGuard AI, a friendly and professional assistant for loan covenant and ESG compliance monitoring.
 You have access to REAL DATA from the LoanGuard database. Use this data to provide specific, accurate answers.
 
 REAL DATA FROM DATABASE:
 {data_context}
+{conversation_history}
+
+⚠️ CRITICAL ANTI-HALLUCINATION RULES (MUST FOLLOW):
+- NEVER invent, make up, or hallucinate loan IDs, borrower names, amounts, or any data
+- ONLY use loan IDs, borrower names, and numbers that appear in the REAL DATA section above
+- If the data you need is NOT in the REAL DATA section, say "I don't have that specific data in my current view"
+- When user asks about sectors, industries, or specific categories not in the data, say "I would need to query that specific data - let me show you what I do have"
+- Do NOT create fake examples like "SolarGrid Inc." or "L003" if they're not in the real data
+- It's better to admit limitations than to provide false information
+
+IMPORTANT CONTEXT RULES:
+- You are in a CONVERSATION. Pay attention to conversation history above.
+- When user says "yes", "sure", "ok", "tell me more", etc., CONTINUE the previous topic.
+- Reference previous messages to maintain context.
+- If user asks a follow-up, relate it to what was just discussed.
 
 MODERN FORMATTING RULES (2025 Chat Style):
 - Use emojis to make responses visually appealing: 📊 for data, ⚠️ for warnings, ✅ for success, 🔴 for critical, 💰 for money, 📈 for trends
@@ -912,7 +1081,7 @@ MODERN FORMATTING RULES (2025 Chat Style):
 - Start with a brief summary line
 - Use clear section headers when listing multiple items
 - Keep responses concise but informative
-- Always cite the EXACT loan IDs and numbers from the data above
+- Always cite the EXACT loan IDs and numbers from the REAL DATA section
 - If showing a list, limit to top 5 items unless user asks for more
 - End with a helpful follow-up suggestion when appropriate"""
         
@@ -2237,9 +2406,9 @@ async def run_stress_test(request: Request):
         
         if loan_ids:
             placeholders = ', '.join([f"'{lid}'" for lid in loan_ids])
-            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` WHERE loan_id IN ({placeholders})"
+            query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` WHERE loan_id IN ({placeholders})"
         else:
-            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 100"
+            query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 100"
         
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
@@ -2284,7 +2453,7 @@ async def compare_stress_scenarios(request: Request):
         
         # Fetch loans
         bq = get_bigquery_client()
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 100"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 100"
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
         
@@ -2317,7 +2486,7 @@ async def calculate_loan_ecl(loan_id: str):
         from common.bigquery_client import get_bigquery_client
         
         bq = get_bigquery_client()
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` WHERE loan_id = '{loan_id}'"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` WHERE loan_id = '{loan_id}'"
         result = bq.client.query(query)
         rows = list(result)
         
@@ -2347,7 +2516,7 @@ async def get_portfolio_ecl_summary():
         from common.bigquery_client import get_bigquery_client
         
         bq = get_bigquery_client()
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 500"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 500"
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
         
@@ -2398,7 +2567,7 @@ async def run_monte_carlo_simulation(request: Request):
         
         # Fetch loans
         bq = get_bigquery_client()
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 200"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 200"
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
         
@@ -2440,7 +2609,7 @@ async def get_var_at_confidence(confidence: float):
         
         # Fetch loans
         bq = get_bigquery_client()
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 200"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 200"
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
         
@@ -2509,9 +2678,9 @@ async def run_production_stress_test(request: Request):
         
         if loan_ids:
             placeholders = ', '.join([f"'{lid}'" for lid in loan_ids])
-            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` WHERE loan_id IN ({placeholders})"
+            query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` WHERE loan_id IN ({placeholders})"
         else:
-            query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 50"
+            query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 50"
         
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
@@ -2552,7 +2721,7 @@ async def run_production_monte_carlo(request: Request):
         
         # Fetch loans
         bq = get_bigquery_client()
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 100"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 100"
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
         
@@ -2638,7 +2807,7 @@ async def run_what_if_scenario(request: Request):
         
         # Fetch loans
         bq = get_bigquery_client()
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT 50"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT 50"
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
         
@@ -2862,7 +3031,7 @@ async def price_portfolio(request: Request):
         # Fetch loans from BigQuery
         bq = get_bigquery_client()
         limit = data.get('limit', 50)
-        query = f"SELECT * FROM `{bq.project}.{bq.dataset}.loans` LIMIT {limit}"
+        query = f"SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` LIMIT {limit}"
         result = bq.client.query(query)
         loans = [dict(row) for row in result]
         
@@ -2888,7 +3057,7 @@ async def get_loan_pricing(loan_id: str):
         
         bq = get_bigquery_client()
         query = f"""
-            SELECT * FROM `{bq.project}.{bq.dataset}.loans` 
+            SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans` 
             WHERE loan_id = '{loan_id}' LIMIT 1
         """
         result = bq.client.query(query)

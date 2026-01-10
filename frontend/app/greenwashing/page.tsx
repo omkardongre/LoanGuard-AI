@@ -245,7 +245,7 @@ export default function GreenwashingPage() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {/* Language Flags */}
-                    {claim.language_flags.length > 0 && (
+                    {claim.language_flags && claim.language_flags.length > 0 && (
                       <div>
                         <p className="text-sm font-medium text-slate-700 mb-1">
                           Language Issues:
@@ -265,7 +265,7 @@ export default function GreenwashingPage() {
                     )}
 
                     {/* Contradictions */}
-                    {claim.contradictions.length > 0 && (
+                    {claim.contradictions && claim.contradictions.length > 0 && (
                       <div>
                         <p className="text-sm font-medium text-red-700 mb-1">
                           ⚠️ Contradicting Evidence:
@@ -295,7 +295,7 @@ export default function GreenwashingPage() {
                     )}
 
                     {/* Supporting Evidence */}
-                    {claim.supporting_evidence.length > 0 && (
+                    {claim.supporting_evidence && claim.supporting_evidence.length > 0 && (
                       <div>
                         <p className="text-sm font-medium text-emerald-700 mb-1">
                           ✓ Supporting Evidence:

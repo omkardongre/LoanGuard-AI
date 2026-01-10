@@ -252,12 +252,12 @@ async function apiRequest<T>(
       ...options?.headers,
     },
   });
-  
+
   if (!res.ok) {
     const errorText = await res.text().catch(() => "Unknown error");
     throw new Error(`API Error ${res.status}: ${errorText}`);
   }
-  
+
   return res.json();
 }
 
@@ -299,7 +299,7 @@ export async function fetchLoans(params?: {
   if (params?.status) searchParams.set("status", params.status);
   if (params?.limit) searchParams.set("limit", params.limit.toString());
   if (params?.offset) searchParams.set("offset", params.offset.toString());
-  
+
   const query = searchParams.toString();
   return apiRequest(`/api/loans${query ? `?${query}` : ""}`);
 }
@@ -581,7 +581,7 @@ export async function fetchAlerts(params?: {
     searchParams.set("acknowledged", params.acknowledged.toString());
   }
   if (params?.limit) searchParams.set("limit", params.limit.toString());
-  
+
   const query = searchParams.toString();
   return apiRequest(`/api/alerts${query ? `?${query}` : ""}`);
 }
@@ -618,16 +618,16 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append("file", file);
   formData.append("loan_id", loanId);
-  
+
   const res = await fetch(`${API_BASE_URL}/api/documents/upload?loan_id=${loanId}`, {
     method: "POST",
     body: formData,
   });
-  
+
   if (!res.ok) {
     throw new Error(`Upload failed: ${res.status}`);
   }
-  
+
   return res.json();
 }
 
@@ -648,16 +648,23 @@ export async function fetchDocument(documentId: string): Promise<{
 // Chat (AI Agent)
 // ============================================
 
+export interface ChatHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export async function chatWithAgent(
   message: string,
-  loanId?: string
+  loanId?: string,
+  history?: ChatHistoryMessage[]
 ): Promise<{
   response: string;
   suggestions: string[];
 }> {
-  const body: Record<string, string> = { message };
+  const body: Record<string, unknown> = { message };
   if (loanId) body.loan_id = loanId;
-  
+  if (history && history.length > 0) body.history = history;
+
   return apiRequest("/api/chat", {
     method: "POST",
     body: JSON.stringify(body),
@@ -671,22 +678,22 @@ export async function chatWithAgent(
 export async function downloadLoanPdfReport(loanId: string): Promise<Blob> {
   const url = `${API_BASE_URL}/api/loans/${loanId}/report/pdf`;
   const response = await fetch(url);
-  
+
   if (!response.ok) {
     throw new Error(`Failed to generate PDF: ${response.status}`);
   }
-  
+
   return response.blob();
 }
 
 export async function downloadPortfolioPdfReport(): Promise<Blob> {
   const url = `${API_BASE_URL}/api/portfolio/report/pdf`;
   const response = await fetch(url);
-  
+
   if (!response.ok) {
     throw new Error(`Failed to generate PDF: ${response.status}`);
   }
-  
+
   return response.blob();
 }
 

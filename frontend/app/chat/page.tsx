@@ -83,7 +83,21 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      const response = await chatWithAgent(currentInput, selectedLoan || undefined);
+      // Build conversation history for context (exclude initial greeting, limit to recent messages)
+      const historyForContext = messages
+        .slice(1) // Skip initial greeting
+        .concat(userMessage) // Include current message
+        .slice(-10) // Keep last 10 messages
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+
+      const response = await chatWithAgent(
+        currentInput,
+        selectedLoan || undefined,
+        historyForContext
+      );
 
       const assistantMessage: Message = {
         role: "assistant",
@@ -194,15 +208,15 @@ export default function ChatPage() {
 
               <div
                 className={`max-w-2xl p-4 rounded-xl ${message.role === "user"
-                    ? "bg-emerald-600 text-white"
-                    : message.error
-                      ? "bg-red-50 border border-red-200 shadow-sm"
-                      : "bg-white border shadow-sm"
+                  ? "bg-emerald-600 text-white"
+                  : message.error
+                    ? "bg-red-50 border border-red-200 shadow-sm"
+                    : "bg-white border shadow-sm"
                   }`}
               >
                 <div className={`prose prose-sm max-w-none ${message.role === "user"
-                    ? "prose-invert"
-                    : "prose-slate prose-headings:text-slate-800 prose-headings:font-semibold prose-headings:text-base prose-p:text-slate-700 prose-strong:text-slate-900 prose-li:text-slate-700"
+                  ? "prose-invert"
+                  : "prose-slate prose-headings:text-slate-800 prose-headings:font-semibold prose-headings:text-base prose-p:text-slate-700 prose-strong:text-slate-900 prose-li:text-slate-700"
                   }`}>
                   <ReactMarkdown
                     components={{

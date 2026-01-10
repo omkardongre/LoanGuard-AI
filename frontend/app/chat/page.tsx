@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import ReactMarkdown from "react-markdown";
 import {
   Send,
   Bot,
@@ -180,9 +181,8 @@ export default function ChatPage() {
             >
               {message.role === "assistant" && (
                 <div
-                  className={`p-2 rounded-full h-fit ${
-                    message.error ? "bg-red-100" : "bg-emerald-100"
-                  }`}
+                  className={`p-2 rounded-full h-fit ${message.error ? "bg-red-100" : "bg-emerald-100"
+                    }`}
                 >
                   {message.error ? (
                     <AlertCircle className="h-4 w-4 text-red-600" />
@@ -193,25 +193,39 @@ export default function ChatPage() {
               )}
 
               <div
-                className={`max-w-2xl p-4 rounded-xl ${
-                  message.role === "user"
+                className={`max-w-2xl p-4 rounded-xl ${message.role === "user"
                     ? "bg-emerald-600 text-white"
                     : message.error
-                    ? "bg-red-50 border border-red-200 shadow-sm"
-                    : "bg-white border shadow-sm"
-                }`}
+                      ? "bg-red-50 border border-red-200 shadow-sm"
+                      : "bg-white border shadow-sm"
+                  }`}
               >
-                <div className="prose prose-sm max-w-none">
-                  {message.content.split("\n").map((line, i) => (
-                    <p key={i} className="mb-1 last:mb-0">
-                      {line}
-                    </p>
-                  ))}
+                <div className={`prose prose-sm max-w-none ${message.role === "user"
+                    ? "prose-invert"
+                    : "prose-slate prose-headings:text-slate-800 prose-headings:font-semibold prose-headings:text-base prose-p:text-slate-700 prose-strong:text-slate-900 prose-li:text-slate-700"
+                  }`}>
+                  <ReactMarkdown
+                    components={{
+                      // Custom heading styles
+                      h1: ({ children }) => <h1 className="text-lg font-bold mt-3 mb-2">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1 text-slate-800">{children}</h3>,
+                      // Bold text
+                      strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+                      // Lists
+                      ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2">{children}</ol>,
+                      li: ({ children }) => <li className="text-sm">{children}</li>,
+                      // Paragraphs
+                      p: ({ children }) => <p className="mb-2 last:mb-0 text-sm leading-relaxed">{children}</p>,
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
                 </div>
                 <p
-                  className={`text-xs mt-2 ${
-                    message.role === "user" ? "text-emerald-200" : "text-slate-400"
-                  }`}
+                  className={`text-xs mt-2 ${message.role === "user" ? "text-emerald-200" : "text-slate-400"
+                    }`}
                 >
                   {message.timestamp.toLocaleTimeString()}
                 </p>

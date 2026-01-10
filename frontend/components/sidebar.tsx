@@ -18,16 +18,11 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/analytics", label: "Analytics", icon: BarChart3, highlight: true },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/loans", label: "Loans", icon: FileText },
   { href: "/upload", label: "Upload", icon: Upload },
   { href: "/covenants", label: "Covenants", icon: Shield },
-  {
-    href: "/greenwashing",
-    label: "Greenwashing",
-    icon: ShieldAlert,
-    highlight: true,
-  },
+  { href: "/greenwashing", label: "Greenwashing", icon: ShieldAlert },
   { href: "/esg", label: "ESG", icon: Leaf },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/chat", label: "AI Chat", icon: MessageSquare },
@@ -59,18 +54,11 @@ export function Sidebar() {
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                 isActive
                   ? "bg-emerald-600 text-white"
-                  : item.highlight
-                  ? "text-emerald-400 hover:bg-slate-800 border border-emerald-600/50"
                   : "text-slate-300 hover:bg-slate-800"
               )}
             >
               <Icon className="h-4 w-4" />
               {item.label}
-              {item.highlight && !isActive && (
-                <span className="ml-auto text-[10px] bg-emerald-600 px-1.5 py-0.5 rounded">
-                  NEW
-                </span>
-              )}
             </Link>
           );
         })}

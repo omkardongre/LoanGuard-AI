@@ -30,7 +30,7 @@ shap>=0.44.0
 # Document Processing
 pypdf>=4.0.0
 python-docx>=1.1.0
-affinda>=6.0.0
+affinda>=4.28.0
 
 # Email and Notifications
 sendgrid>=6.11.0

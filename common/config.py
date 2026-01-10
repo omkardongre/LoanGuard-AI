@@ -7,6 +7,19 @@ Provides port configurations, service URLs, and default parameters for all agent
 import os
 from dataclasses import dataclass
 from typing import Optional
+from pathlib import Path
+
+# Load .env file from project root
+from dotenv import load_dotenv
+
+# Find project root (where .env file is)
+_project_root = Path(__file__).parent.parent
+_env_file = _project_root / ".env"
+if _env_file.exists():
+    load_dotenv(_env_file)
+else:
+    # Try loading from current directory
+    load_dotenv()
 
 
 @dataclass

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Model configuration
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Google Cloud configuration
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "")

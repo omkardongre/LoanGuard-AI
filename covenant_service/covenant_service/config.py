@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Model configuration
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.2"))
 
 # Google Cloud configuration

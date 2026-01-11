@@ -776,5 +776,1011 @@ async def get_loan_news_validation(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================
+# SLL Monitoring Module (P0 - WINNING_STRATEGY_FINAL.md)
+# Based on LMA SLLP (Sustainability-Linked Loan Principles)
+# ============================================
+
+from esg_service.esg_service.tools.sll_kpi_extractor import (
+    extract_sll_kpis_from_document,
+    get_loan_sll_kpis,
+    get_sll_kpi_extractor,
+)
+from esg_service.esg_service.tools.spt_tools import (
+    get_spt_definitions,
+    validate_spt_achievement,
+    calculate_margin_adjustment,
+)
+
+
+class SLLKPIRequest(BaseModel):
+    """Request for SLL KPI extraction."""
+    loan_id: str = Field(..., description="Loan identifier")
+    document_text: str = Field(..., description="Raw document text")
+    document_id: Optional[str] = Field(None, description="Source document ID")
+    save_to_db: bool = Field(True, description="Save to BigQuery")
+
+
+class SLLMarginRequest(BaseModel):
+    """Request for margin adjustment calculation."""
+    loan_id: str = Field(..., description="Loan identifier")
+
+
+# GET /sll/loan/{loan_id}/kpis - Get loan SLL KPIs
+@router.get("/sll/loan/{loan_id}/kpis")
+async def get_sll_kpis(
+    loan_id: str = Path(..., description="Loan identifier"),
+):
+    """
+    Get all SLL KPIs for a specific loan from BigQuery.
+    
+    Returns:
+        KPI list with verification status, achievement probability
+    """
+    try:
+        result = get_loan_sll_kpis(loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"SLL KPI fetch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /sll/kpis/extract - Extract KPIs from document
+@router.post("/sll/kpis/extract")
+async def extract_sll_kpis(request: SLLKPIRequest):
+    """
+    Extract SLL KPIs from document text using Gemini AI.
+    
+    Returns:
+        Extracted KPIs with types, baselines, targets
+    """
+    try:
+        result = extract_sll_kpis_from_document(
+            loan_id=request.loan_id,
+            document_text=request.document_text,
+            document_id=request.document_id,
+            save_to_db=request.save_to_db,
+        )
+        return result
+    except Exception as e:
+        logger.exception(f"SLL KPI extraction error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /sll/loan/{loan_id}/spts - Get SPT definitions
+@router.get("/sll/loan/{loan_id}/spts")
+async def get_loan_spts(
+    loan_id: str = Path(..., description="Loan identifier"),
+):
+    """
+    Get SPT (Sustainability Performance Target) definitions for a loan.
+    
+    Returns:
+        SPT list with target values, achievement status
+    """
+    try:
+        result = get_spt_definitions(loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"SPT fetch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /sll/loan/{loan_id}/spts/validate - Validate SPT achievement
+@router.get("/sll/loan/{loan_id}/spts/validate")
+async def validate_loan_spts(
+    loan_id: str = Path(..., description="Loan identifier"),
+):
+    """
+    Validate SPT achievement against actual values.
+    
+    Returns:
+        Validation results per SPT
+    """
+    try:
+        result = validate_spt_achievement(loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"SPT validation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /sll/loan/{loan_id}/margin - Calculate margin adjustment
+@router.get("/sll/loan/{loan_id}/margin")
+async def calculate_loan_margin_adjustment(
+    loan_id: str = Path(..., description="Loan identifier"),
+):
+    """
+    Calculate margin adjustment based on SPT achievement.
+    Two-way pricing per LMA SLLP guidelines.
+    
+    Returns:
+        Margin adjustment in basis points, direction
+    """
+    try:
+        result = calculate_margin_adjustment(loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"Margin calculation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /sll/portfolio/summary - Portfolio SLL summary
+@router.get("/sll/portfolio/summary")
+async def get_sll_portfolio_summary():
+    """
+    Get SLL portfolio summary statistics from BigQuery.
+    
+    Returns:
+        Total SLL loans, KPIs, verification rates, achievement probabilities
+    """
+    try:
+        bq = BigQueryClient()
+        
+        # Portfolio-level SLL statistics
+        query = f"""
+            WITH sll_stats AS (
+                SELECT 
+                    loan_id,
+                    COUNT(*) as kpi_count,
+                    COUNTIF(verification_status = 'VERIFIED') as verified_count,
+                    AVG(achievement_probability) as avg_achievement_prob
+                FROM `{bq.project_id}.{bq.dataset_id}.sll_kpis`
+                GROUP BY loan_id
+            ),
+            spt_stats AS (
+                SELECT
+                    COUNT(*) as total_spts,
+                    COUNTIF(status = 'ACHIEVED') as achieved_spts,
+                    AVG(margin_impact_bps) as avg_margin_impact
+                FROM `{bq.project_id}.{bq.dataset_id}.sll_spts`
+            )
+            SELECT 
+                COUNT(DISTINCT s.loan_id) as sll_loan_count,
+                COALESCE(SUM(s.kpi_count), 0) as total_kpis,
+                COALESCE(SUM(s.verified_count), 0) as verified_kpis,
+                COALESCE(AVG(s.avg_achievement_prob), 0) as avg_achievement_probability,
+                COALESCE(sp.total_spts, 0) as total_spts,
+                COALESCE(sp.achieved_spts, 0) as achieved_spts,
+                COALESCE(sp.avg_margin_impact, 0) as avg_margin_impact_bps
+            FROM sll_stats s
+            CROSS JOIN spt_stats sp
+        """
+        
+        results = bq.execute_query(query)
+        
+        if results:
+            row = results[0]
+            return {
+                "success": True,
+                "sll_loan_count": row.get("sll_loan_count", 0),
+                "total_kpis": row.get("total_kpis", 0),
+                "verified_kpis": row.get("verified_kpis", 0),
+                "verification_rate": round(
+                    (row.get("verified_kpis", 0) / max(row.get("total_kpis", 1), 1)) * 100, 1
+                ),
+                "avg_achievement_probability": round(row.get("avg_achievement_probability", 0) * 100, 1),
+                "total_spts": row.get("total_spts", 0),
+                "achieved_spts": row.get("achieved_spts", 0),
+                "spt_achievement_rate": round(
+                    (row.get("achieved_spts", 0) / max(row.get("total_spts", 1), 1)) * 100, 1
+                ),
+                "avg_margin_impact_bps": row.get("avg_margin_impact_bps", 0),
+                "source": "BigQuery",
+            }
+        else:
+            return {
+                "success": True,
+                "sll_loan_count": 0,
+                "total_kpis": 0,
+                "verified_kpis": 0,
+                "verification_rate": 0,
+                "avg_achievement_probability": 0,
+                "total_spts": 0,
+                "achieved_spts": 0,
+                "spt_achievement_rate": 0,
+                "avg_margin_impact_bps": 0,
+                "source": "BigQuery",
+            }
+    except Exception as e:
+        logger.exception(f"SLL portfolio summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# Fund Finance Module (P0 - WINNING_STRATEGY_FINAL.md)
+
+# ============================================
+
+from esg_service.esg_service.tools.nav_monitor import (
+    get_nav_facility,
+    calculate_nav_ltv,
+    get_nav_buffer_analysis,
+    create_nav_facility,
+    get_nav_portfolio_summary,
+)
+from esg_service.esg_service.tools.lp_transparency import (
+    get_lp_positions,
+    get_fund_leverage_exposure,
+    get_lp_leverage,
+    create_lp_position,
+)
+from esg_service.esg_service.tools.ilpa_compliance import (
+    check_ilpa_compliance,
+    validate_ilpa_compliance,
+)
+from esg_service.esg_service.tools.subscription_tracker import (
+    calculate_borrowing_base,
+    create_capital_call,
+    get_capital_calls,
+    get_overdue_calls,
+)
+
+
+# Request Models for Fund Finance
+class NAVFacilityRequest(BaseModel):
+    """Request for creating NAV facility."""
+    fund_id: str = Field(..., description="Fund identifier")
+    fund_name: str = Field(..., description="Fund name")
+    fund_type: str = Field("PE", description="Fund type: PE, VC, RE, Infrastructure")
+    nav_value: float = Field(..., description="Current NAV value")
+    facility_amount: float = Field(..., description="Total facility amount")
+    drawn_amount: float = Field(0, description="Currently drawn amount")
+    ltv_covenant_threshold: float = Field(0.15, description="LTV covenant threshold (e.g., 0.15 for 15%)")
+
+
+class CapitalCallRequest(BaseModel):
+    """Request for creating capital call."""
+    fund_id: str = Field(..., description="Fund identifier")
+    call_amount: float = Field(..., description="Amount to call")
+    purpose: str = Field("Investment", description="Purpose: Investment, Management Fee, Expenses")
+    due_date: Optional[str] = Field(None, description="Due date (YYYY-MM-DD)")
+
+
+class LPPositionRequest(BaseModel):
+    """Request for creating LP position."""
+    fund_id: str = Field(..., description="Fund identifier")
+    lp_name: str = Field(..., description="LP name")
+    lp_type: str = Field("Institutional", description="LP type: Pension, Insurance, Endowment")
+    commitment_amount: float = Field(..., description="Commitment amount")
+    is_lpac_member: bool = Field(False, description="Is LP an LPAC member")
+
+
+# GET /api/fund-finance/nav/{id} - Get NAV facility details
+@router.get("/fund-finance/nav/{facility_id}")
+async def get_nav_facility_details(
+    facility_id: str = Path(..., description="NAV facility identifier"),
+) -> Dict[str, Any]:
+    """
+    Get NAV facility details.
+    
+    Returns facility information including current LTV ratio and buffer analysis.
+    """
+    try:
+        result = get_nav_facility(facility_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Facility not found"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"NAV facility retrieval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/fund-finance/nav/create - Create NAV facility
+@router.post("/fund-finance/nav/create")
+async def create_nav_facility_endpoint(
+    request: NAVFacilityRequest,
+) -> Dict[str, Any]:
+    """
+    Create a new NAV facility.
+    
+    Calculates initial LTV ratio and buffer percentage.
+    Based on ILPA July 2024 NAV-Based Facilities Guidance.
+    """
+    try:
+        result = create_nav_facility({
+            "fund_id": request.fund_id,
+            "fund_name": request.fund_name,
+            "fund_type": request.fund_type,
+            "nav_value": request.nav_value,
+            "facility_amount": request.facility_amount,
+            "drawn_amount": request.drawn_amount,
+            "ltv_covenant_threshold": request.ltv_covenant_threshold,
+        })
+        return result
+    except Exception as e:
+        logger.exception(f"NAV facility creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/fund-finance/ltv/{id} - Calculate current LTV
+@router.get("/fund-finance/ltv/{facility_id}")
+async def calculate_ltv_endpoint(
+    facility_id: str = Path(..., description="NAV facility identifier"),
+) -> Dict[str, Any]:
+    """
+    Calculate current LTV ratio for NAV facility.
+    
+    Returns LTV percentage, covenant threshold, buffer percentage,
+    and NAV decline percentage that would trigger covenant breach.
+    """
+    try:
+        result = calculate_nav_ltv(facility_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Facility not found"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"LTV calculation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/fund-finance/buffer/{id} - Get buffer analysis
+@router.get("/fund-finance/buffer/{facility_id}")
+async def get_buffer_analysis_endpoint(
+    facility_id: str = Path(..., description="NAV facility identifier"),
+) -> Dict[str, Any]:
+    """
+    Get detailed buffer analysis for NAV facility.
+    
+    Includes stress scenarios showing LTV impact at various NAV decline levels,
+    and calculates the NAV decline percentage required to breach covenant.
+    """
+    try:
+        result = get_nav_buffer_analysis(facility_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Facility not found"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Buffer analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/fund-finance/ilpa/check - Validate ILPA compliance
+@router.post("/fund-finance/ilpa/check/{facility_id}")
+async def check_ilpa_compliance_endpoint(
+    facility_id: str = Path(..., description="NAV facility identifier"),
+) -> Dict[str, Any]:
+    """
+    Check ILPA compliance for NAV facility.
+    
+    Validates facility against ILPA July 2024 NAV-Based Facilities Guidance:
+    - LPA provisions addressing NAV facilities
+    - Leverage limits defined
+    - LPAC consent obtained
+    - Required disclosures provided
+    
+    Returns compliance score and recommendations.
+    """
+    try:
+        result = check_ilpa_compliance(facility_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Facility not found"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"ILPA compliance check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/fund-finance/lp/{fund_id}/transparency - LP transparency data
+@router.get("/fund-finance/lp/{fund_id}/transparency")
+async def get_lp_transparency_endpoint(
+    fund_id: str = Path(..., description="Fund identifier"),
+) -> Dict[str, Any]:
+    """
+    Get LP transparency data including aggregate leverage exposure.
+    
+    ILPA Guidance: "LPs calling for greater visibility on fund-level leverage"
+    
+    Returns fund-level leverage breakdown including NAV and subscription facilities.
+    """
+    try:
+        positions = get_lp_positions(fund_id)
+        leverage = get_fund_leverage_exposure(fund_id)
+        
+        return {
+            "success": True,
+            "fund_id": fund_id,
+            "lp_positions": positions,
+            "leverage_exposure": leverage,
+        }
+    except Exception as e:
+        logger.exception(f"LP transparency error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/fund-finance/portfolio - Portfolio summary
+@router.get("/fund-finance/portfolio")
+async def get_fund_finance_portfolio_summary() -> Dict[str, Any]:
+    """
+    Get portfolio-level NAV facility summary.
+    
+    Aggregates all NAV facilities with total exposure, average LTV,
+    and facilities in breach or warning status.
+    """
+    try:
+        result = get_nav_portfolio_summary()
+        return result
+    except Exception as e:
+        logger.exception(f"Portfolio summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/fund-finance/capital-call/create - Create capital call
+@router.post("/fund-finance/capital-call/create")
+async def create_capital_call_endpoint(
+    request: CapitalCallRequest,
+) -> Dict[str, Any]:
+    """
+    Create a new capital call for a fund.
+    
+    Used for subscription facility tracking and LP obligation monitoring.
+    """
+    try:
+        result = create_capital_call({
+            "fund_id": request.fund_id,
+            "call_amount": request.call_amount,
+            "purpose": request.purpose,
+            "due_date": request.due_date,
+        })
+        return result
+    except Exception as e:
+        logger.exception(f"Capital call creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/fund-finance/capital-calls/{fund_id} - Get capital calls
+@router.get("/fund-finance/capital-calls/{fund_id}")
+async def get_fund_capital_calls(
+    fund_id: str = Path(..., description="Fund identifier"),
+    status: Optional[str] = Query(None, description="Filter by status: PENDING, PARTIAL, COMPLETE"),
+) -> Dict[str, Any]:
+    """
+    Get capital calls for a fund.
+    
+    Includes total called, received, and outstanding amounts.
+    """
+    try:
+        result = get_capital_calls(fund_id, status)
+        return result
+    except Exception as e:
+        logger.exception(f"Capital calls retrieval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/fund-finance/overdue-calls - Get overdue calls
+@router.get("/fund-finance/overdue-calls")
+async def get_overdue_capital_calls(
+    fund_id: Optional[str] = Query(None, description="Optional fund filter"),
+) -> Dict[str, Any]:
+    """
+    Get overdue capital calls.
+    
+    Returns calls past due date that have not been fully paid.
+    Critical for subscription facility borrowing base impact.
+    """
+    try:
+        result = get_overdue_calls(fund_id)
+        return result
+    except Exception as e:
+        logger.exception(f"Overdue calls retrieval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/fund-finance/borrowing-base/{fund_id} - Calculate borrowing base
+@router.get("/fund-finance/borrowing-base/{fund_id}")
+async def calculate_borrowing_base_endpoint(
+    fund_id: str = Path(..., description="Fund identifier"),
+) -> Dict[str, Any]:
+    """
+    Calculate borrowing base from LP commitments.
+    
+    Borrowing base = (Included LP Commitments - Exclusions) * Advance Rate
+    
+    Used for subscription facility availability calculation.
+    """
+    try:
+        result = calculate_borrowing_base(fund_id)
+        return result
+    except Exception as e:
+        logger.exception(f"Borrowing base calculation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/fund-finance/lp/create - Create LP position
+@router.post("/fund-finance/lp/create")
+async def create_lp_position_endpoint(
+    request: LPPositionRequest,
+) -> Dict[str, Any]:
+    """
+    Create a new LP position for a fund.
+    
+    Tracks LP commitments for subscription facility and leverage exposure.
+    """
+    try:
+        result = create_lp_position({
+            "fund_id": request.fund_id,
+            "lp_name": request.lp_name,
+            "lp_type": request.lp_type,
+            "commitment_amount": request.commitment_amount,
+            "is_lpac_member": request.is_lpac_member,
+        })
+        return result
+    except Exception as e:
+        logger.exception(f"LP position creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# Transition Loans Module Endpoints (P1)
+# Based on LMA Transition Loan Principles (October 2025)
+# ============================================
+
+# Import Transition Loans tools
+from esg_service.esg_service.tools import (
+    validate_transition_loan,
+    get_tlp_summary,
+    assess_carbon_lockin,
+    get_portfolio_lockin_summary,
+    screen_dnsh,
+    get_portfolio_dnsh_summary,
+    generate_tlp_report,
+    get_tlp_portfolio_report,
+)
+
+
+class TransitionLoanRequest(BaseModel):
+    """Request for transition loan assessment."""
+    loan_id: str = Field(..., description="Loan identifier")
+
+
+class CarbonLockinRequest(BaseModel):
+    """Request for carbon lock-in assessment."""
+    loan_id: Optional[str] = Field(None, description="Loan identifier")
+    project_lifetime_years: Optional[int] = Field(None, description="Asset operational lifetime")
+    utilization_rate: Optional[float] = Field(None, ge=0, le=1, description="Utilization rate 0-1")
+    emissions_trajectory: Optional[str] = Field(None, description="DECREASING, STABLE, INCREASING")
+    cumulative_emissions_tco2: Optional[float] = Field(None, description="Total lifetime emissions")
+    displaceability: Optional[str] = Field(None, description="YES, PARTIAL, NO")
+    reversibility: Optional[str] = Field(None, description="YES, PARTIAL, NO")
+    best_available_tech: Optional[bool] = Field(None, description="Using best-available technology")
+
+
+class DNSHScreeningRequest(BaseModel):
+    """Request for DNSH screening."""
+    loan_id: Optional[str] = Field(None, description="Loan identifier")
+
+
+# GET /api/transition/validate/{loan_id} - Validate TLP compliance
+@router.get("/transition/validate/{loan_id}")
+async def validate_tlp_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+) -> Dict[str, Any]:
+    """
+    Validate Transition Loan Principles compliance.
+    
+    Scores 5 TLP principles:
+    1. Entity-Level Transition Strategy
+    2. Use of Proceeds
+    3. Process for Project Evaluation and Selection
+    4. Management of Proceeds
+    5. Reporting
+    
+    Based on LMA Guide to Transition Loans (October 2025).
+    """
+    try:
+        result = validate_transition_loan(loan_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Loan not found"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"TLP validation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/transition/summary - Get TLP portfolio summary
+@router.get("/transition/summary")
+async def get_tlp_summary_endpoint() -> Dict[str, Any]:
+    """
+    Get portfolio-level TLP compliance summary.
+    
+    Returns aggregate statistics on transition loan compliance.
+    """
+    try:
+        result = get_tlp_summary()
+        return result
+    except Exception as e:
+        logger.exception(f"TLP summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/transition/carbon-lockin - Assess carbon lock-in risk
+@router.post("/transition/carbon-lockin")
+async def assess_carbon_lockin_endpoint(
+    request: CarbonLockinRequest,
+) -> Dict[str, Any]:
+    """
+    Assess carbon lock-in risk for a transition project.
+    
+    Based on LMA TLP Section 3.2.1 iv - 8 assessment criteria:
+    - Project lifetime
+    - Utilization rates
+    - Emissions trajectory
+    - Cumulative emissions
+    - Displaceability
+    - Reversibility
+    - Best-available technology
+    - End-use emissions
+    """
+    try:
+        if request.loan_id:
+            result = assess_carbon_lockin(loan_id=request.loan_id)
+        else:
+            asset_data = {
+                "project_lifetime_years": request.project_lifetime_years,
+                "utilization_rate": request.utilization_rate,
+                "emissions_trajectory": request.emissions_trajectory,
+                "cumulative_emissions_tco2": request.cumulative_emissions_tco2,
+                "displaceability": request.displaceability,
+                "reversibility": request.reversibility,
+                "best_available_tech": request.best_available_tech,
+            }
+            result = assess_carbon_lockin(asset_data=asset_data)
+        return result
+    except Exception as e:
+        logger.exception(f"Carbon lock-in assessment error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/transition/carbon-lockin/summary - Get portfolio lock-in summary
+@router.get("/transition/carbon-lockin/summary")
+async def get_lockin_summary_endpoint() -> Dict[str, Any]:
+    """
+    Get portfolio-level carbon lock-in risk summary.
+    
+    Returns aggregate statistics on carbon lock-in risk across transition loans.
+    """
+    try:
+        result = get_portfolio_lockin_summary()
+        return result
+    except Exception as e:
+        logger.exception(f"Carbon lock-in summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/transition/dnsh/screen - DNSH screening
+@router.post("/transition/dnsh/screen")
+async def screen_dnsh_endpoint(
+    request: DNSHScreeningRequest,
+) -> Dict[str, Any]:
+    """
+    Screen project for Do No Significant Harm (DNSH) compliance.
+    
+    Checks 6 EU Taxonomy environmental objectives:
+    1. Climate change mitigation
+    2. Climate change adaptation
+    3. Sustainable use of water and marine resources
+    4. Transition to a circular economy
+    5. Pollution prevention and control
+    6. Protection of biodiversity and ecosystems
+    """
+    try:
+        result = screen_dnsh(loan_id=request.loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"DNSH screening error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/transition/dnsh/summary - Get portfolio DNSH summary
+@router.get("/transition/dnsh/summary")
+async def get_dnsh_summary_endpoint() -> Dict[str, Any]:
+    """
+    Get portfolio-level DNSH screening summary.
+    
+    Returns aggregate statistics on DNSH compliance across transition loans.
+    """
+    try:
+        result = get_portfolio_dnsh_summary()
+        return result
+    except Exception as e:
+        logger.exception(f"DNSH summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/transition/report/{loan_id} - Generate TLP report
+@router.get("/transition/report/{loan_id}")
+async def generate_tlp_report_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+) -> Dict[str, Any]:
+    """
+    Generate TLP-compliant report for a transition loan.
+    
+    LMA Principle 5 (Reporting) - MANDATORY requirements:
+    1. List of Transition Projects funded
+    2. Amounts allocated to each project
+    3. Expected AND achieved impact of each project
+    """
+    try:
+        result = generate_tlp_report(loan_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Report generation failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"TLP report generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/transition/report/portfolio - Get portfolio TLP report
+@router.get("/transition/report/portfolio")
+async def get_portfolio_report_endpoint() -> Dict[str, Any]:
+    """
+    Generate portfolio-level TLP report.
+    
+    Aggregates data across all transition loans for regulatory reporting.
+    """
+    try:
+        result = get_tlp_portfolio_report()
+        return result
+    except Exception as e:
+        logger.exception(f"Portfolio TLP report error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# SLLB & Regional Module Endpoints (P1/P2)
+# Based on ICMA SLLBG, SARB ZARONIA, SFDR 2.0
+# ============================================
+
+# Import SLLB & Regional tools
+from esg_service.esg_service.tools import (
+    create_sllb_portfolio,
+    get_sllb_portfolio,
+    add_sll_to_sllb,
+    get_sllb_summary,
+    evaluate_sll_eligibility,
+    assess_jibar_transition,
+    initiate_zaronia_transition,
+    get_zaronia_transition_summary,
+    classify_sfdr_product,
+    get_sfdr_portfolio_summary,
+)
+
+
+class SLLBPortfolioRequest(BaseModel):
+    """Request for SLLB portfolio creation."""
+    bond_isin: Optional[str] = Field(None, description="Bond ISIN")
+    bond_name: str = Field(..., description="Bond name")
+    issuer_name: str = Field(..., description="Issuer name")
+    issue_date: Optional[str] = Field(None, description="Issue date YYYY-MM-DD")
+    maturity_date: Optional[str] = Field(None, description="Maturity date YYYY-MM-DD")
+    bond_amount: float = Field(..., description="Bond amount")
+    currency: str = Field(default="USD", description="Currency code")
+    sustainability_objective: Optional[str] = Field(None, description="Single sustainability objective")
+
+
+class AddSLLRequest(BaseModel):
+    """Request to add SLL to SLLB portfolio."""
+    loan_id: str = Field(..., description="SLL loan ID")
+    borrower_sector: Optional[str] = Field(None, description="Borrower sector")
+    borrower_geography: Optional[str] = Field(None, description="Borrower geography")
+    loan_amount: float = Field(..., description="SLL amount")
+    allocated_to_bond: Optional[float] = Field(None, description="Amount allocated to bond")
+    kpi_type: Optional[str] = Field(None, description="KPI type")
+    spt_description: Optional[str] = Field(None, description="SPT description")
+
+
+# POST /api/sllb/portfolio/create - Create SLLB portfolio
+@router.post("/sllb/portfolio/create")
+async def create_sllb_portfolio_endpoint(
+    request: SLLBPortfolioRequest,
+) -> Dict[str, Any]:
+    """
+    Create a new SLLB portfolio.
+    
+    ICMA SLLBG Component 1: Use of Proceeds - 
+    Bond proceeds allocated to eligible SLLs.
+    """
+    try:
+        result = create_sllb_portfolio({
+            "bond_isin": request.bond_isin,
+            "bond_name": request.bond_name,
+            "issuer_name": request.issuer_name,
+            "issue_date": request.issue_date,
+            "maturity_date": request.maturity_date,
+            "bond_amount": request.bond_amount,
+            "currency": request.currency,
+            "sustainability_objective": request.sustainability_objective,
+        })
+        return result
+    except Exception as e:
+        logger.exception(f"SLLB portfolio creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/sllb/portfolio/{portfolio_id} - Get SLLB portfolio
+@router.get("/sllb/portfolio/{portfolio_id}")
+async def get_sllb_portfolio_endpoint(
+    portfolio_id: str = Path(..., description="Portfolio ID"),
+) -> Dict[str, Any]:
+    """
+    Get SLLB portfolio details with eligible SLLs.
+    
+    Includes sector and geography breakdowns per ICMA reporting.
+    """
+    try:
+        result = get_sllb_portfolio(portfolio_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"SLLB portfolio retrieval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/sllb/portfolio/{portfolio_id}/add-sll - Add SLL to portfolio
+@router.post("/sllb/portfolio/{portfolio_id}/add-sll")
+async def add_sll_to_sllb_endpoint(
+    portfolio_id: str,
+    request: AddSLLRequest,
+) -> Dict[str, Any]:
+    """
+    Add an eligible SLL to SLLB portfolio.
+    
+    ICMA SLLBG Component 3: Management of Proceeds.
+    """
+    try:
+        result = add_sll_to_sllb(portfolio_id, request.loan_id, {
+            "borrower_sector": request.borrower_sector,
+            "borrower_geography": request.borrower_geography,
+            "loan_amount": request.loan_amount,
+            "allocated_to_bond": request.allocated_to_bond or request.loan_amount,
+            "kpi_type": request.kpi_type,
+            "spt_description": request.spt_description,
+        })
+        return result
+    except Exception as e:
+        logger.exception(f"Add SLL error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/sllb/summary - Get SLLB portfolio summary
+@router.get("/sllb/summary")
+async def get_sllb_summary_endpoint() -> Dict[str, Any]:
+    """
+    Get aggregate SLLB portfolio summary.
+    
+    ICMA SLLBG Component 4: Reporting.
+    """
+    try:
+        result = get_sllb_summary()
+        return result
+    except Exception as e:
+        logger.exception(f"SLLB summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/sllb/eligibility/{loan_id} - Evaluate SLL eligibility
+@router.get("/sllb/eligibility/{loan_id}")
+async def evaluate_eligibility_endpoint(
+    loan_id: str = Path(..., description="Loan ID"),
+) -> Dict[str, Any]:
+    """
+    Evaluate SLL eligibility for SLLB inclusion.
+    
+    ICMA SLLBG Component 2: Process for SLL Evaluation & Selection.
+    Scores: SLLP alignment, KPI materiality, SPT ambition, verification.
+    """
+    try:
+        result = evaluate_sll_eligibility(loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"Eligibility evaluation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/zaronia/assess/{loan_id} - Assess JIBAR transition
+@router.get("/zaronia/assess/{loan_id}")
+async def assess_jibar_transition_endpoint(
+    loan_id: str = Path(..., description="Loan ID"),
+) -> Dict[str, Any]:
+    """
+    Assess loan's JIBAR to ZARONIA transition readiness.
+    
+    JIBAR discontinuation deadline: December 31, 2026.
+    ZARONIA = South African Rand Overnight Index Average.
+    """
+    try:
+        result = assess_jibar_transition(loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"JIBAR assessment error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/zaronia/initiate/{loan_id} - Initiate transition
+@router.post("/zaronia/initiate/{loan_id}")
+async def initiate_zaronia_endpoint(
+    loan_id: str = Path(..., description="Loan ID"),
+) -> Dict[str, Any]:
+    """
+    Initiate JIBAR to ZARONIA transition.
+    
+    Creates transition record and recommended next steps.
+    """
+    try:
+        result = initiate_zaronia_transition(loan_id)
+        return result
+    except Exception as e:
+        logger.exception(f"ZARONIA initiation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/zaronia/summary - Get transition summary
+@router.get("/zaronia/summary")
+async def get_zaronia_summary_endpoint() -> Dict[str, Any]:
+    """
+    Get portfolio-level JIBAR transition summary.
+    
+    Shows completion rates and days to deadline.
+    """
+    try:
+        result = get_zaronia_transition_summary()
+        return result
+    except Exception as e:
+        logger.exception(f"ZARONIA summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/sfdr/classify/{product_id} - Classify under SFDR 2.0
+@router.get("/sfdr/classify/{product_id}")
+async def classify_sfdr_endpoint(
+    product_id: str = Path(..., description="Product ID"),
+) -> Dict[str, Any]:
+    """
+    Classify financial product under SFDR 2.0.
+    
+    New categories (replacing Article 8/9):
+    - Article 7: Transition (70% threshold)
+    - Article 8: ESG Basics (70% threshold)
+    - Article 9: Sustainable (70% threshold)
+    """
+    try:
+        result = classify_sfdr_product(product_id)
+        return result
+    except Exception as e:
+        logger.exception(f"SFDR classification error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/sfdr/summary - Get SFDR classification summary
+@router.get("/sfdr/summary")
+async def get_sfdr_summary_endpoint() -> Dict[str, Any]:
+    """
+    Get portfolio-level SFDR 2.0 classification summary.
+    
+    Shows distribution across new categories.
+    """
+    try:
+        result = get_sfdr_portfolio_summary()
+        return result
+    except Exception as e:
+        logger.exception(f"SFDR summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Export router
 __all__ = ["router"]

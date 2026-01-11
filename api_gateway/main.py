@@ -3914,6 +3914,507 @@ async def get_approval_history(limit: int = 50, loan_id: str = None):
         return {'success': False, 'error': str(e)}
 
 
+# ============================================
+# SLL (Sustainability-Linked Loan) Module (NEW - Strategy P0)
+# ============================================
+
+
+class SLLKPIExtractRequest(BaseModel):
+    """Request for SLL KPI extraction from document."""
+    loan_id: str
+    document_text: str
+    document_id: Optional[str] = None
+    save_to_db: bool = True
+
+
+class SLLKPIResponse(BaseModel):
+    """Response with extracted SLL KPIs."""
+    success: bool
+    loan_id: str
+    kpis_extracted: int
+    kpis: List[Dict[str, Any]]
+    source: str
+
+
+@app.post("/api/sll/kpis/extract", response_model=SLLKPIResponse)
+async def extract_sll_kpis(request: SLLKPIExtractRequest):
+    """
+    Extract SLL KPIs from loan document text using Gemini AI.
+    
+    Follows LMA SLLP (Sustainability-Linked Loan Principles) guidelines.
+    Supports GHG, Energy, Water, Waste, Biodiversity, Social, and Governance KPIs.
+    """
+    try:
+        from esg_service.esg_service.tools.sll_kpi_extractor import extract_sll_kpis_from_document
+        
+        result = extract_sll_kpis_from_document(
+            loan_id=request.loan_id,
+            document_text=request.document_text,
+            document_id=request.document_id,
+            save_to_db=request.save_to_db,
+        )
+        
+        return SLLKPIResponse(
+            success=result.get("success", False),
+            loan_id=request.loan_id,
+            kpis_extracted=result.get("kpis_extracted", 0),
+            kpis=result.get("kpis", []),
+            source=result.get("source", "SLL KPI Extractor"),
+        )
+    except Exception as e:
+        logger.error(f"SLL KPI extraction error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sll/loan/{loan_id}/kpis")
+async def get_loan_sll_kpis(loan_id: str):
+    """Get all SLL KPIs for a loan from BigQuery."""
+    try:
+        from esg_service.esg_service.tools.sll_kpi_extractor import get_loan_sll_kpis
+        
+        result = get_loan_sll_kpis(loan_id)
+        return result
+    except Exception as e:
+        logger.error(f"Get SLL KPIs error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sll/kpis/{kpi_id}/update")
+async def update_sll_kpi_value(
+    kpi_id: str,
+    current_value: float,
+    measurement_date: Optional[str] = None,
+):
+    """Update current value for an SLL KPI."""
+    try:
+        from common.bigquery_client import BigQueryClient
+        from datetime import date
+        
+        bq = BigQueryClient()
+        m_date = measurement_date or date.today().isoformat()
+        
+        update_query = f"""
+            UPDATE `{bq.project_id}.{bq.dataset_id}.sll_kpis`
+            SET 
+                current_value = {current_value},
+                last_measurement_date = '{m_date}',
+                updated_at = CURRENT_TIMESTAMP()
+            WHERE kpi_id = '{kpi_id}'
+        """
+        
+        bq.execute_query(update_query)
+        
+        return {
+            "success": True,
+            "kpi_id": kpi_id,
+            "new_value": current_value,
+            "measurement_date": m_date,
+        }
+    except Exception as e:
+        logger.error(f"Update SLL KPI error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sll/loan/{loan_id}/spts")
+async def get_loan_sll_spts(loan_id: str):
+    """Get all SPTs for a loan from BigQuery."""
+    try:
+        from common.bigquery_client import BigQueryClient
+        
+        bq = BigQueryClient()
+        
+        query = f"""
+            SELECT 
+                spt_id,
+                kpi_id,
+                target_description,
+                target_value,
+                target_year,
+                target_type,
+                current_progress,
+                achievement_probability,
+                margin_impact_bps,
+                verification_required,
+                verifier_name,
+                verification_date,
+                status,
+                created_at
+            FROM `{bq.project_id}.{bq.dataset_id}.sll_spts`
+            WHERE loan_id = '{loan_id}'
+            ORDER BY target_year ASC
+        """
+        
+        results = bq.execute_query(query)
+        
+        return {
+            "success": True,
+            "loan_id": loan_id,
+            "spt_count": len(results),
+            "spts": results,
+        }
+    except Exception as e:
+        logger.error(f"Get SLL SPTs error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SLLMarginCalculateRequest(BaseModel):
+    """Request for SLL margin adjustment calculation."""
+    loan_id: str
+    period_end: str
+    two_way_pricing: bool = False
+
+
+@app.post("/api/sll/margin/calculate")
+async def calculate_sll_margin_adjustment(request: SLLMarginCalculateRequest):
+    """
+    Calculate margin adjustment based on SPT achievement.
+    
+    Supports one-way (step-down only) and two-way (step-up/step-down) pricing.
+    """
+    try:
+        from common.bigquery_client import BigQueryClient
+        
+        bq = BigQueryClient()
+        
+        # Get SPTs and their achievement status
+        spt_query = f"""
+            SELECT 
+                s.spt_id,
+                s.target_value,
+                s.margin_impact_bps,
+                s.status,
+                k.current_value,
+                s.target_type
+            FROM `{bq.project_id}.{bq.dataset_id}.sll_spts` s
+            LEFT JOIN `{bq.project_id}.{bq.dataset_id}.sll_kpis` k ON s.kpi_id = k.kpi_id
+            WHERE s.loan_id = '{request.loan_id}'
+        """
+        
+        spts = bq.execute_query(spt_query)
+        
+        achieved = []
+        not_achieved = []
+        
+        for spt in spts:
+            target = spt.get("target_value", 0)
+            current = spt.get("current_value", 0)
+            target_type = spt.get("target_type", "reduction")
+            
+            if target_type == "reduction":
+                is_achieved = current is not None and current <= target
+            else:
+                is_achieved = current is not None and current >= target
+            
+            if is_achieved:
+                achieved.append(spt)
+            else:
+                not_achieved.append(spt)
+        
+        # Calculate adjustment
+        achieved_bps = sum(s.get("margin_impact_bps", 0) for s in achieved)
+        
+        if request.two_way_pricing:
+            not_achieved_bps = sum(s.get("margin_impact_bps", 0) for s in not_achieved)
+            net_adjustment = achieved_bps - not_achieved_bps
+            direction = "step-down" if net_adjustment > 0 else "step-up" if net_adjustment < 0 else "no_change"
+        else:
+            net_adjustment = achieved_bps
+            direction = "step-down" if net_adjustment > 0 else "no_change"
+        
+        return {
+            "success": True,
+            "loan_id": request.loan_id,
+            "period_end": request.period_end,
+            "spts_total": len(spts),
+            "spts_achieved": len(achieved),
+            "spts_not_achieved": len(not_achieved),
+            "achieved_adjustment_bps": achieved_bps,
+            "net_adjustment_bps": abs(net_adjustment),
+            "adjustment_direction": direction,
+            "two_way_pricing": request.two_way_pricing,
+            "effective_margin_change": f"{'-' if direction == 'step-down' else '+' if direction == 'step-up' else ''}{abs(net_adjustment)} bps",
+        }
+    except Exception as e:
+        logger.error(f"SLL margin calculation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sll/portfolio/summary")
+async def get_sll_portfolio_summary():
+    """Get summary of all SLL loans in portfolio."""
+    try:
+        from common.bigquery_client import BigQueryClient
+        
+        bq = BigQueryClient()
+        
+        # Get SLL loan statistics
+        query = f"""
+            WITH sll_stats AS (
+                SELECT 
+                    loan_id,
+                    COUNT(*) as kpi_count,
+                    COUNTIF(verification_status = 'VERIFIED') as verified_count,
+                    AVG(achievement_probability) as avg_achievement_prob
+                FROM `{bq.project_id}.{bq.dataset_id}.sll_kpis`
+                GROUP BY loan_id
+            )
+            SELECT 
+                COUNT(DISTINCT loan_id) as sll_loan_count,
+                SUM(kpi_count) as total_kpis,
+                SUM(verified_count) as verified_kpis,
+                AVG(avg_achievement_prob) as avg_achievement_probability
+            FROM sll_stats
+        """
+        
+        results = bq.execute_query(query)
+        
+        if results:
+            row = results[0]
+            return {
+                "success": True,
+                "sll_loan_count": row.get("sll_loan_count", 0),
+                "total_kpis": row.get("total_kpis", 0),
+                "verified_kpis": row.get("verified_kpis", 0),
+                "avg_achievement_probability": round(row.get("avg_achievement_probability", 0) or 0, 2),
+            }
+        else:
+            return {
+                "success": True,
+                "sll_loan_count": 0,
+                "total_kpis": 0,
+                "verified_kpis": 0,
+                "avg_achievement_probability": 0,
+            }
+    except Exception as e:
+        logger.error(f"SLL portfolio summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# SLL Monitoring Module Proxy Routes
+# ============================================
+
+@app.get("/api/sll/loan/{loan_id}/kpis")
+async def get_sll_kpis(loan_id: str):
+    """Proxy to ESG service for SLL KPIs."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sll/loan/{loan_id}/kpis")
+        return response.json()
+
+
+@app.get("/api/sll/loan/{loan_id}/spts")
+async def get_sll_spts(loan_id: str):
+    """Proxy to ESG service for SPT definitions."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sll/loan/{loan_id}/spts")
+        return response.json()
+
+
+@app.get("/api/sll/loan/{loan_id}/spts/validate")
+async def validate_sll_spts(loan_id: str):
+    """Proxy to ESG service for SPT validation."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sll/loan/{loan_id}/spts/validate")
+        return response.json()
+
+
+@app.get("/api/sll/loan/{loan_id}/margin")
+async def get_sll_margin(loan_id: str):
+    """Proxy to ESG service for margin adjustment calculation."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sll/loan/{loan_id}/margin")
+        return response.json()
+
+
+@app.get("/api/sll/portfolio/summary")
+async def get_sll_portfolio_summary_proxy():
+    """Proxy to ESG service for SLL portfolio summary."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sll/portfolio/summary")
+        return response.json()
+
+
+# ============================================
+# Fund Finance Module Proxy Routes
+# ============================================
+
+
+@app.get("/api/fund-finance/nav/portfolio")
+async def get_nav_portfolio():
+    """Proxy to ESG service for NAV portfolio."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/fund-finance/portfolio")
+        return response.json()
+
+
+@app.get("/api/fund-finance/nav/{facility_id}")
+async def get_nav_facility(facility_id: str):
+    """Proxy to ESG service for NAV facility details."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/fund-finance/nav/{facility_id}")
+        return response.json()
+
+
+@app.get("/api/fund-finance/ltv/{facility_id}")
+async def get_ltv(facility_id: str):
+    """Proxy to ESG service for LTV calculation."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/fund-finance/ltv/{facility_id}")
+        return response.json()
+
+
+@app.get("/api/fund-finance/buffer/{facility_id}")
+async def get_buffer_analysis(facility_id: str):
+    """Proxy to ESG service for buffer analysis."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/fund-finance/buffer/{facility_id}")
+        return response.json()
+
+
+@app.get("/api/fund-finance/ilpa/{fund_id}/check")
+async def check_ilpa_compliance(fund_id: str):
+    """Proxy to ESG service for ILPA compliance check."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/fund-finance/ilpa/{fund_id}/check")
+        return response.json()
+
+
+@app.get("/api/fund-finance/lp/{fund_id}/transparency")
+async def get_lp_transparency(fund_id: str):
+    """Proxy to ESG service for LP transparency."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/fund-finance/lp/{fund_id}/transparency")
+        return response.json()
+
+
+@app.get("/api/fund-finance/summary")
+async def get_fund_finance_summary():
+    """Proxy to ESG service for fund finance summary."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/fund-finance/portfolio")
+        return response.json()
+
+
+# ============================================
+# Transition Loans Module Proxy Routes
+# ============================================
+
+@app.get("/api/transition/validate/{loan_id}")
+async def validate_transition_loan(loan_id: str):
+    """Proxy to ESG service for TLP validation."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/transition/validate/{loan_id}")
+        return response.json()
+
+
+@app.get("/api/transition/tlp-score/{loan_id}")
+async def get_tlp_score(loan_id: str):
+    """Proxy to ESG service for TLP score."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/transition/validate/{loan_id}")
+        return response.json()
+
+
+@app.get("/api/transition/carbon-lockin/{loan_id}")
+async def assess_carbon_lockin(loan_id: str):
+    """Proxy to ESG service for carbon lock-in assessment."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(f"{ESG_SERVICE_URL}/transition/carbon-lockin", json={"loan_id": loan_id})
+        return response.json()
+
+
+@app.get("/api/transition/dnsh/{loan_id}")
+async def screen_dnsh(loan_id: str):
+    """Proxy to ESG service for DNSH screening."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(f"{ESG_SERVICE_URL}/transition/dnsh/screen", json={"loan_id": loan_id})
+        return response.json()
+
+
+@app.get("/api/transition/summary")
+async def get_transition_summary():
+    """Proxy to ESG service for transition loans summary."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/transition/summary")
+        return response.json()
+
+
+@app.get("/api/transition/report/{loan_id}")
+async def get_tlp_report(loan_id: str):
+    """Proxy to ESG service for TLP report generation."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/transition/report/{loan_id}")
+        return response.json()
+
+
+# ============================================
+# SLLB & Regional Module Proxy Routes
+# ============================================
+
+@app.get("/api/sllb/summary")
+async def get_sllb_summary():
+    """Proxy to ESG service for SLLB portfolio summary."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sllb/summary")
+        return response.json()
+
+
+@app.get("/api/sllb/portfolio/{portfolio_id}")
+async def get_sllb_portfolio(portfolio_id: str):
+    """Proxy to ESG service for SLLB portfolio details."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sllb/portfolio/{portfolio_id}")
+        return response.json()
+
+
+@app.get("/api/sllb/eligibility/{loan_id}")
+async def evaluate_sll_eligibility(loan_id: str):
+    """Proxy to ESG service for SLL eligibility evaluation."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sllb/eligibility/{loan_id}")
+        return response.json()
+
+
+# ============================================
+# ZARONIA Transition Module Proxy Routes
+# ============================================
+
+@app.get("/api/zaronia/assess/{loan_id}")
+async def assess_zaronia_transition(loan_id: str):
+    """Proxy to ESG service for ZARONIA transition assessment."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/zaronia/assess/{loan_id}")
+        return response.json()
+
+
+@app.get("/api/zaronia/summary")
+async def get_zaronia_summary():
+    """Proxy to ESG service for ZARONIA transition summary."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/zaronia/summary")
+        return response.json()
+
+
+# ============================================
+# SFDR 2.0 Classification Module Proxy Routes
+# ============================================
+
+@app.get("/api/sfdr/classify/{product_id}")
+async def classify_sfdr(product_id: str):
+    """Proxy to ESG service for SFDR classification."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sfdr/classify/{product_id}")
+        return response.json()
+
+
+@app.get("/api/sfdr/summary")
+async def get_sfdr_summary():
+    """Proxy to ESG service for SFDR classification summary."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ESG_SERVICE_URL}/sfdr/summary")
+        return response.json()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)

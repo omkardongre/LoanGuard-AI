@@ -901,3 +901,411 @@ export async function fetchPrepaymentV2ModelInfo(): Promise<{
   return apiRequest("/api/ml/prepayment/v2/model-info");
 }
 
+// ============================================
+// Fund Finance Module (WINNING_STRATEGY L145-153)
+// ============================================
+
+export interface NAVFacility {
+  facility_id: string;
+  fund_name: string;
+  fund_type: string;
+  nav_value: number;
+  facility_amount: number;
+  drawn_amount: number;
+  ltv_ratio: number;
+  buffer_percentage: number;
+  valuation_date: string;
+  ilpa_compliant: boolean;
+}
+
+export interface LPPosition {
+  lp_id: string;
+  lp_name: string;
+  commitment_amount: number;
+  funded_amount: number;
+  unfunded_commitment: number;
+  concentration_pct: number;
+}
+
+export async function fetchNAVFacilities(): Promise<{
+  success: boolean;
+  facilities: NAVFacility[];
+  total: number;
+  source: string;
+}> {
+  return apiRequest("/api/fund-finance/nav/portfolio");
+}
+
+export async function fetchNAVFacility(facilityId: string): Promise<{
+  success: boolean;
+  facility: NAVFacility;
+  source: string;
+}> {
+  return apiRequest(`/api/fund-finance/nav/${facilityId}`);
+}
+
+export async function fetchLTV(facilityId: string): Promise<{
+  success: boolean;
+  facility_id: string;
+  current_ltv: number;
+  max_ltv: number;
+  buffer: number;
+  status: string;
+  source: string;
+}> {
+  return apiRequest(`/api/fund-finance/ltv/${facilityId}`);
+}
+
+export async function fetchBufferAnalysis(facilityId: string): Promise<{
+  success: boolean;
+  facility_id: string;
+  current_buffer: number;
+  required_buffer: number;
+  additional_borrowing_capacity: number;
+  source: string;
+}> {
+  return apiRequest(`/api/fund-finance/buffer/${facilityId}`);
+}
+
+export async function checkILPACompliance(fundId: string): Promise<{
+  success: boolean;
+  fund_id: string;
+  compliant: boolean;
+  compliance_score: number;
+  requirements_met: string[];
+  requirements_failed: string[];
+  source: string;
+}> {
+  return apiRequest(`/api/fund-finance/ilpa/${fundId}/check`);
+}
+
+export async function fetchLPTransparency(fundId: string): Promise<{
+  success: boolean;
+  fund_id: string;
+  lp_positions: LPPosition[];
+  total_commitment: number;
+  concentration_risk: string;
+  source: string;
+}> {
+  return apiRequest(`/api/fund-finance/lp/${fundId}/transparency`);
+}
+
+export async function fetchFundFinanceSummary(): Promise<{
+  success: boolean;
+  total_facilities: number;
+  total_nav: number;
+  avg_ltv: number;
+  ilpa_compliant_count: number;
+  source: string;
+}> {
+  return apiRequest("/api/fund-finance/summary");
+}
+
+// ============================================
+// Transition Loans Module (WINNING_STRATEGY L157-164)
+// ============================================
+
+export interface TLPAssessment {
+  loan_id: string;
+  overall_score: number;
+  compliance_status: string;
+  principles: Array<{
+    principle: string;
+    score: number;
+    status: string;
+  }>;
+}
+
+export interface CarbonLockinAssessment {
+  loan_id: string;
+  risk_level: string;
+  assessment_score: number;
+  criteria_scores: Record<string, number>;
+  recommendations: string[];
+}
+
+export interface DNSHScreening {
+  loan_id: string;
+  overall_status: string;
+  objectives: Array<{
+    objective: string;
+    status: string;
+    score: number;
+  }>;
+}
+
+export async function validateTransitionLoan(loanId: string): Promise<{
+  success: boolean;
+  assessment: TLPAssessment;
+  source: string;
+}> {
+  return apiRequest(`/api/transition/validate/${loanId}`);
+}
+
+export async function fetchTLPScore(loanId: string): Promise<{
+  success: boolean;
+  loan_id: string;
+  tlp_score: number;
+  status: string;
+  source: string;
+}> {
+  return apiRequest(`/api/transition/tlp-score/${loanId}`);
+}
+
+export async function assessCarbonLockin(loanId: string): Promise<{
+  success: boolean;
+  assessment: CarbonLockinAssessment;
+  source: string;
+}> {
+  return apiRequest(`/api/transition/carbon-lockin/${loanId}`);
+}
+
+export async function screenDNSH(loanId: string): Promise<{
+  success: boolean;
+  screening: DNSHScreening;
+  source: string;
+}> {
+  return apiRequest(`/api/transition/dnsh/${loanId}`);
+}
+
+export async function fetchTransitionLoansSummary(): Promise<{
+  success: boolean;
+  total_loans: number;
+  compliant_count: number;
+  avg_tlp_score: number;
+  carbon_lockin_distribution: Record<string, number>;
+  source: string;
+}> {
+  return apiRequest("/api/transition/summary");
+}
+
+export async function generateTLPReport(loanId: string): Promise<{
+  success: boolean;
+  report: {
+    loan_id: string;
+    generated_at: string;
+    sections: Record<string, unknown>;
+  };
+  source: string;
+}> {
+  return apiRequest(`/api/transition/report/${loanId}`);
+}
+
+// ============================================
+// SLLB & Regional Module (WINNING_STRATEGY L166-174)
+// ============================================
+
+export interface SLLBPortfolio {
+  portfolio_id: string;
+  bond_name: string;
+  issuer_name: string;
+  bond_amount: number;
+  currency: string;
+  total_sll_amount: number;
+  eligible_sll_count: number;
+  status: string;
+}
+
+export interface SLLBEligibility {
+  loan_id: string;
+  eligible: boolean;
+  eligibility_score: number;
+  component_scores: Record<string, number>;
+  recommendation: string;
+}
+
+export interface ZARONIATransition {
+  loan_id: string;
+  requires_transition: boolean;
+  transition_status: string;
+  deadline: string;
+  days_remaining: number;
+  urgency: string;
+}
+
+export interface SFDRClassification {
+  product_id: string;
+  current_classification: string;
+  new_classification: string;
+  category_details: {
+    name: string;
+    description: string;
+    threshold: number;
+  };
+  component_scores: Record<string, number>;
+}
+
+export async function fetchSLLBPortfolios(): Promise<{
+  success: boolean;
+  portfolios: SLLBPortfolio[];
+  total: number;
+  source: string;
+}> {
+  return apiRequest("/api/sllb/summary");
+}
+
+export async function fetchSLLBPortfolio(portfolioId: string): Promise<{
+  success: boolean;
+  portfolio: SLLBPortfolio;
+  eligible_slls: Array<{
+    loan_id: string;
+    borrower_sector: string;
+    loan_amount: number;
+    kpi_type: string;
+  }>;
+  source: string;
+}> {
+  return apiRequest(`/api/sllb/portfolio/${portfolioId}`);
+}
+
+export async function evaluateSLLEligibility(loanId: string): Promise<{
+  success: boolean;
+  eligibility: SLLBEligibility;
+  source: string;
+}> {
+  return apiRequest(`/api/sllb/eligibility/${loanId}`);
+}
+
+export async function assessZARONIATransition(loanId: string): Promise<{
+  success: boolean;
+  assessment: ZARONIATransition;
+  source: string;
+}> {
+  return apiRequest(`/api/zaronia/assess/${loanId}`);
+}
+
+export async function fetchZARONIASummary(): Promise<{
+  success: boolean;
+  deadline: string;
+  days_remaining: number;
+  total_transitions: number;
+  by_status: Record<string, number>;
+  completion_rate: number;
+  source: string;
+}> {
+  return apiRequest("/api/zaronia/summary");
+}
+
+export async function classifySFDR(productId: string): Promise<{
+  success: boolean;
+  classification: SFDRClassification;
+  source: string;
+}> {
+  return apiRequest(`/api/sfdr/classify/${productId}`);
+}
+
+export async function fetchSFDRSummary(): Promise<{
+  success: boolean;
+  total_products: number;
+  by_category: Record<string, number>;
+  avg_taxonomy_alignment: number;
+  source: string;
+}> {
+  return apiRequest("/api/sfdr/summary");
+}
+
+
+// ============================================
+// SLL Monitoring Module API Functions
+// Based on LMA SLLP (Sustainability-Linked Loan Principles)
+// ============================================
+
+export interface SLLKPI {
+  kpi_id: string;
+  loan_id: string;
+  kpi_type: string;
+  kpi_name: string;
+  baseline_value: number;
+  target_value: number;
+  current_value: number;
+  unit: string;
+  target_year: number;
+  measurement_frequency: string;
+  verification_status: "PENDING" | "VERIFIED" | "FAILED";
+  achievement_probability: number;
+  last_measurement_date: string;
+}
+
+export interface SLLSPT {
+  spt_id: string;
+  loan_id: string;
+  kpi_id?: string;
+  target_description: string;
+  target_value: number;
+  current_progress: number;
+  achievement_probability: number;
+  margin_impact_bps: number;
+  verification_required: boolean;
+  verifier_name?: string;
+  status: "ACTIVE" | "ACHIEVED" | "NOT_ACHIEVED" | "EXPIRED";
+}
+
+export interface SLLMarginAdjustment {
+  loan_id: string;
+  calculation_date: string;
+  spts_achieved: number;
+  spts_not_achieved: number;
+  total_spts: number;
+  adjustment_direction: "step-down" | "step-up" | "no_change";
+  adjustment_bps: number;
+  two_way_pricing: boolean;
+  new_margin_bps: number;
+  previous_margin_bps: number;
+}
+
+export async function fetchSLLKPIs(loanId: string): Promise<{
+  success: boolean;
+  loan_id: string;
+  kpis: SLLKPI[];
+  source: string;
+}> {
+  return apiRequest(`/api/sll/loan/${loanId}/kpis`);
+}
+
+export async function fetchSLLSPTs(loanId: string): Promise<{
+  success: boolean;
+  loan_id: string;
+  spts: SLLSPT[];
+  source: string;
+}> {
+  return apiRequest(`/api/sll/loan/${loanId}/spts`);
+}
+
+export async function validateSLLSPTs(loanId: string): Promise<{
+  success: boolean;
+  loan_id: string;
+  validation_results: Array<{
+    spt_id: string;
+    achieved: boolean;
+    variance_pct: number;
+  }>;
+  source: string;
+}> {
+  return apiRequest(`/api/sll/loan/${loanId}/spts/validate`);
+}
+
+export async function calculateSLLMargin(loanId: string): Promise<{
+  success: boolean;
+  loan_id: string;
+  margin_adjustment: SLLMarginAdjustment;
+  source: string;
+}> {
+  return apiRequest(`/api/sll/loan/${loanId}/margin`);
+}
+
+export async function fetchSLLPortfolioSummary(): Promise<{
+  success: boolean;
+  sll_loan_count: number;
+  total_kpis: number;
+  verified_kpis: number;
+  verification_rate: number;
+  avg_achievement_probability: number;
+  total_spts: number;
+  achieved_spts: number;
+  spt_achievement_rate: number;
+  avg_margin_impact_bps: number;
+  source: string;
+}> {
+  return apiRequest("/api/sll/portfolio/summary");
+}
+

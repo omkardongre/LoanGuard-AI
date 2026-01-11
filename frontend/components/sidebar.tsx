@@ -13,6 +13,10 @@ import {
   ShieldAlert,
   Upload,
   BarChart3,
+  Wallet,
+  ArrowRightLeft,
+  Building2,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,9 +28,15 @@ const navItems = [
   { href: "/covenants", label: "Covenants", icon: Shield },
   { href: "/greenwashing", label: "Greenwashing", icon: ShieldAlert },
   { href: "/esg", label: "ESG", icon: Leaf },
+  { href: "/sll", label: "SLL Monitoring", icon: Target },
+  { href: "/fund-finance", label: "Fund Finance", icon: Wallet },
+  { href: "/transition-loans", label: "Transition", icon: ArrowRightLeft },
+  { href: "/sllb", label: "SLLB & Regional", icon: Building2 },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/chat", label: "AI Chat", icon: MessageSquare },
 ];
+
+
 
 export function Sidebar() {
   const pathname = usePathname();

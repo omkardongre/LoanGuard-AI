@@ -125,17 +125,21 @@ export interface BreachPrediction {
   model_version: string;
 }
 
+export interface SHAPFactor {
+  feature: string;
+  value: number;
+  shap_value: number;
+  impact: string; // "increases" or "decreases"
+  explanation: string;
+}
+
 export interface SHAPExplanation {
+  success: boolean;
   loan_id: string;
-  explanation_type: string;
-  base_value: number;
-  prediction: number;
-  feature_contributions: Array<{
-    feature: string;
-    value: number;
-    contribution: number;
-  }>;
-  summary: string;
+  base_probability: number;
+  final_probability: number;
+  top_factors: SHAPFactor[];
+  data_source: string;
 }
 
 export interface GreenwashingResult {
@@ -1716,6 +1720,27 @@ export async function getCallStatus(
 
   if (!response.ok) {
     throw new Error("Failed to get call status");
+  }
+
+  return response.json();
+}
+
+/**
+ * Get SHAP explanation for breach prediction.
+ * 
+ * Returns waterfall plot data showing how features contribute to prediction.
+ * Used for ML explainability and regulatory compliance (EU AI Act).
+ */
+export async function getSHAPExplanation(
+  loanId: string,
+  topN: number = 10
+): Promise<SHAPExplanation> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/covenant/loans/${loanId}/predictions/explain?top_n=${topN}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to get SHAP explanation");
   }
 
   return response.json();

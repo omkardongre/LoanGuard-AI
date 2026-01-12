@@ -60,6 +60,7 @@ import {
 } from "@/lib/api";
 import { LGDCard } from "@/components/lgd-card";
 import { PrepaymentCard } from "@/components/prepayment-card";
+import { SHAPWaterfall } from "@/components/shap-waterfall";
 import { ESGRiskCard } from "@/components/esg-risk-card";
 import { StressTestCard } from "@/components/stress-test-card";
 import { ClimateRiskCard } from "@/components/climate-risk-card";
@@ -577,66 +578,10 @@ export default function LoanDetailPage() {
                 </CardContent>
               </Card>
 
-              {/* SHAP Explanation Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-blue-600" />
-                    SHAP Feature Contributions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {explanation ? (
-                    <div className="space-y-4">
-                      <p className="text-sm text-slate-600">{explanation.summary}</p>
-
-                      <div className="space-y-2">
-                        {explanation.feature_contributions
-                          ?.slice(0, 8)
-                          .map((feat, idx) => (
-                            <div key={idx} className="space-y-1">
-                              <div className="flex justify-between text-sm">
-                                <span>{feat.feature}</span>
-                                <span
-                                  className={
-                                    feat.contribution > 0
-                                      ? "text-red-600"
-                                      : "text-emerald-600"
-                                  }
-                                >
-                                  {feat.contribution > 0 ? "+" : ""}
-                                  {(feat.contribution * 100).toFixed(2)}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-2">
-                                <div
-                                  className={`h-2 rounded-full ${
-                                    feat.contribution > 0 ? "bg-red-500" : "bg-emerald-500"
-                                  }`}
-                                  style={{
-                                    width: `${Math.min(
-                                      Math.abs(feat.contribution) * 100 * 2,
-                                      100
-                                    )}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-
-                      <div className="pt-4 border-t text-sm text-slate-500">
-                        <p>Base value: {explanation.base_value?.toFixed(3)}</p>
-                        <p>Final prediction: {explanation.prediction?.toFixed(3)}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-slate-500">
-                      SHAP explanation not available. Run prediction first.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+              {/* SHAP Explanation Card - Use new component */}
+              <div className="lg:col-span-2">
+                <SHAPWaterfall loanId={loanId} />
+              </div>
             </div>
 
             {/* Model Info */}

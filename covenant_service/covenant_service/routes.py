@@ -399,12 +399,15 @@ async def predict_breach_with_metrics(
 @router.get("/loans/{loan_id}/predictions/explain", response_model=ShapExplanationResponse)
 async def get_prediction_explanation(
     loan_id: str = Path(..., description="Loan identifier"),
-    top_n: int = Query(5, ge=1, le=20, description="Number of top factors to return"),
+    top_n: int = Query(10, ge=1, le=20, description="Number of top factors to return"),
 ) -> ShapExplanationResponse:
     """Get SHAP-based explanation for breach prediction."""
     try:
         # Get loan financials
         financials = get_latest_financials(loan_id)
+        
+        # Get prediction for final probability
+        prediction = predict_breach(loan_id, financials or {})
         
         # Get explanation
         result = explain_prediction(loan_id, financials or {}, top_n=top_n)
@@ -412,10 +415,10 @@ async def get_prediction_explanation(
         return ShapExplanationResponse(
             success=result.get("success", False),
             loan_id=loan_id,
-            base_probability=result.get("base_probability", 0),
-            final_probability=result.get("final_probability", 0),
+            base_probability=result.get("base_probability", 0.5),
+            final_probability=prediction.get("breach_probability", 0.5),
             top_factors=result.get("top_factors", []),
-            data_source=result.get("data_source", "Lending Club 2007-2018"),
+            data_source="Lending Club 2007-2018",
         )
     except Exception as e:
         logger.exception(f"Error explaining prediction for {loan_id}")

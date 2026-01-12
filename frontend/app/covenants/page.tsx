@@ -42,6 +42,7 @@ import {
 } from "@/lib/api";
 import { SendEmailButton } from "@/components/send-email-button";
 import { VoiceCallButton } from "@/components/voice-call-button";
+import { SHAPWaterfall } from "@/components/shap-waterfall";
 
 interface CovenantWithLoan extends Covenant {
   loan_id?: string;
@@ -557,7 +558,7 @@ export default function CovenantsPage() {
                                     }
                                   >
                                     {data.prediction.risk_level}
-                                  </Badge>
+                                   </Badge>
                                 </div>
                               </div>
                               {data.prediction.top_risk_factors && (
@@ -573,6 +574,14 @@ export default function CovenantsPage() {
                                 </div>
                               )}
                             </div>
+                          )}
+
+                          {/* SHAP Explanation - AI Explainability */}
+                          {data.prediction && selectedLoan && (
+                            <SHAPWaterfall 
+                              loanId={selectedLoan}
+                              className="mt-6"
+                            />
                           )}
                         </div>
                       );

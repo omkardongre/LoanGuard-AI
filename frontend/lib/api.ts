@@ -1511,3 +1511,212 @@ export async function exportTlpPortfolioPdf(): Promise<Blob> {
 }
 
 
+
+// ============================================
+// Email Alert Functions
+// ============================================
+
+export interface CovenantBreachEmailRequest {
+  loan_id: string;
+  breach_type: string;
+  threshold: string;
+  actual_value: string;
+  severity?: "HIGH" | "MEDIUM" | "LOW";
+}
+
+export interface PortfolioSummaryEmailRequest {
+  period?: "weekly" | "monthly";
+  recipients?: string[];
+}
+
+export interface EmailSendResult {
+  success: boolean;
+  loan_id?: string;
+  period?: string;
+  recipients: string[];
+  subject: string;
+  message: string;
+}
+
+export interface EmailStatusResult {
+  success: boolean;
+  configured: boolean;
+  from_email: string | null;
+  message: string;
+}
+
+/**
+ * Send covenant breach alert email to Risk Committee.
+ * 
+ * Generates professional email using Gemini and sends via SendGrid.
+ * Recipients automatically determined by breach severity.
+ */
+export async function sendCovenantBreachAlert(
+  request: CovenantBreachEmailRequest
+): Promise<EmailSendResult> {
+  const response = await fetch(`${API_BASE_URL}/api/alerts/email/covenant-breach`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to send covenant breach email");
+  }
+
+  return response.json();
+}
+
+/**
+ * Send portfolio summary email to senior management.
+ * 
+ * Generates comprehensive portfolio report from BigQuery metrics.
+ */
+export async function sendPortfolioSummaryEmail(
+  request: PortfolioSummaryEmailRequest = {}
+): Promise<EmailSendResult> {
+  const response = await fetch(`${API_BASE_URL}/api/alerts/email/portfolio-summary`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to send portfolio summary email");
+  }
+
+  return response.json();
+}
+
+/**
+ * Check SendGrid email configuration status.
+ */
+export async function getEmailStatus(): Promise<EmailStatusResult> {
+  const response = await fetch(`${API_BASE_URL}/api/alerts/email/status`);
+
+  if (!response.ok) {
+    throw new Error("Failed to check email configuration");
+  }
+
+  return response.json();
+}
+
+// ============================================
+// Voice Call API (V9 - ElevenLabs Integration)
+// ============================================
+
+export interface CovenantBreachCallRequest {
+  loan_id: string;
+  breach_type: string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  phone_number: string;
+  threshold?: string;
+  actual_value?: string;
+}
+
+export interface BorrowerOutreachCallRequest {
+  loan_id: string;
+  borrower_name: string;
+  phone_number: string;
+  warning_indicators: string[];
+}
+
+export interface VoiceCallResult {
+  success: boolean;
+  loan_id?: string;
+  call_result?: {
+    status: string;
+    conversation_id: string;
+    transcript: Array<{
+      role: string;
+      message: string;
+    }>;
+    debug_info: string[];
+    error: string | null;
+  };
+  error?: string;
+}
+
+export interface CallStatusResult {
+  status: string;
+  conversation_id: string;
+  transcript: Array<{
+    role: string;
+    message: string;
+  }>;
+  error: string | null;
+}
+
+/**
+ * Make covenant breach alert call to Risk Committee.
+ * 
+ * Places outbound call via ElevenLabs Conversational AI.
+ * Returns conversation ID for status polling.
+ */
+export async function makeCovenantBreachCall(
+  request: CovenantBreachCallRequest
+): Promise<VoiceCallResult> {
+  const response = await fetch(`${API_BASE_URL}/api/voice/covenant-breach`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to initiate voice call");
+  }
+
+  return response.json();
+}
+
+/**
+ * Make proactive borrower outreach call.
+ * 
+ * Places outbound call to borrower showing early warning signs.
+ */
+export async function makeBorrowerOutreachCall(
+  request: BorrowerOutreachCallRequest
+): Promise<VoiceCallResult> {
+  const response = await fetch(`${API_BASE_URL}/api/voice/borrower-outreach`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to initiate voice call");
+  }
+
+  return response.json();
+}
+
+/**
+ * Get voice call status and transcript.
+ * 
+ * Polls ElevenLabs for call status and retrieves transcript when available.
+ */
+export async function getCallStatus(
+  conversationId: string
+): Promise<CallStatusResult> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/voice/status/${conversationId}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to get call status");
+  }
+
+  return response.json();
+}

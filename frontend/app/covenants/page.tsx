@@ -40,6 +40,8 @@ import {
   type Covenant,
   type BreachPrediction,
 } from "@/lib/api";
+import { SendEmailButton } from "@/components/send-email-button";
+import { VoiceCallButton } from "@/components/voice-call-button";
 
 interface CovenantWithLoan extends Covenant {
   loan_id?: string;
@@ -436,7 +438,11 @@ export default function CovenantsPage() {
 
                       return (
                         <div className="space-y-4">
-                          {data.covenants.map((cov, idx) => (
+                          {data.covenants.map((cov, idx) => {
+                            const isBreached = (cov.buffer_pct !== undefined && cov.buffer_pct < 0) || cov.status === "RED";
+                            const severity = (cov.buffer_pct || 0) < -10 ? "HIGH" : (cov.buffer_pct || 0) < 0 ? "MEDIUM" : "LOW";
+                            
+                            return (
                             <div
                               key={cov.covenant_id || idx}
                               className="p-4 border rounded-lg"
@@ -448,9 +454,33 @@ export default function CovenantsPage() {
                                     {cov.name || cov.covenant_name || cov.covenant_type}
                                   </span>
                                 </div>
-                                <StatusBadge
-                                  status={cov.status || getStatusFromBuffer(cov.buffer_pct)}
-                                />
+                                <div className="flex items-center gap-2">
+                                  <StatusBadge
+                                    status={cov.status || getStatusFromBuffer(cov.buffer_pct)}
+                                  />
+                                  {isBreached && (
+                                    <>
+                                      <SendEmailButton
+                                        variant="covenant-breach"
+                                        loanId={selectedLoan!}
+                                        breachType={cov.name || cov.covenant_name || cov.covenant_type || "Unknown"}
+                                        threshold={formatThreshold(cov.threshold, cov.covenant_type)}
+                                        actualValue={formatThreshold(cov.actual, cov.covenant_type)}
+                                        severity={severity}
+                                        size="sm"
+                                      />
+                                      <VoiceCallButton
+                                        variant="covenant-breach"
+                                        loanId={selectedLoan!}
+                                        breachType={cov.name || cov.covenant_name || cov.covenant_type || "Unknown"}
+                                        threshold={formatThreshold(cov.threshold, cov.covenant_type)}
+                                        actualValue={formatThreshold(cov.actual, cov.covenant_type)}
+                                        severity={severity}
+                                        size="sm"
+                                      />
+                                    </>
+                                  )}
+                                </div>
                               </div>
                               <div className="grid grid-cols-3 gap-4 text-sm">
                                 <div>
@@ -491,7 +521,7 @@ export default function CovenantsPage() {
                                 </div>
                               )}
                             </div>
-                          ))}
+                          );})}
 
                           {/* ML Prediction for this loan */}
                           {data.prediction && (

@@ -9,7 +9,7 @@ This service exposes the HERO feature: Greenwashing Detection.
 
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, HTTPException, Query, Path, Response
 from pydantic import BaseModel, Field
 import logging
 
@@ -1766,6 +1766,7 @@ async def classify_sfdr_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 # GET /api/sfdr/summary - Get SFDR classification summary
 @router.get("/sfdr/summary")
 async def get_sfdr_summary_endpoint() -> Dict[str, Any]:
@@ -1782,5 +1783,432 @@ async def get_sfdr_summary_endpoint() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================
+# Social Loans Module (SLP March 2025)
+# ============================================
+
+# Import Social Loans tools
+from esg_service.esg_service.tools.social_loan_validator import (
+    validate_social_loan,
+    get_social_loan_summary,
+    save_social_loan_assessment,
+    SLP_CATEGORIES,
+    SLP_TARGET_POPULATIONS,
+)
+from esg_service.esg_service.tools.social_impact_tracker import (
+    get_social_loan_impact,
+    update_social_impact,
+    generate_social_impact_report,
+    get_portfolio_social_impact,
+    SOCIAL_KPIS,
+)
+
+
+# Request/Response Models for Social Loans
+class SocialLoanValidateRequest(BaseModel):
+    """Request for social loan validation."""
+    loan_id: str = Field(..., description="Loan identifier")
+    loan_purpose: Optional[str] = Field(None, description="Loan purpose description for classification")
+
+
+class SocialLoanValidateResponse(BaseModel):
+    """Response for social loan validation."""
+    success: bool
+    loan_id: str
+    is_social_loan: bool
+    is_slp_compliant: bool
+    social_category: str
+    target_populations: List[str]
+    scores: Dict[str, float]
+    recommendations: List[str]
+
+
+class SocialImpactUpdateRequest(BaseModel):
+    """Request for updating social impact metrics."""
+    metrics: Dict[str, Any] = Field(..., description="Impact metrics to update")
+
+
+# POST /api/social/validate - Validate SLP compliance
+@router.post("/social/validate")
+async def validate_social_loan_endpoint(
+    request: SocialLoanValidateRequest,
+) -> Dict[str, Any]:
+    """
+    Validate a loan against Social Loan Principles (SLP March 2025).
+    
+    Performs classification into 6 eligible categories:
+    1. Affordable Basic Infrastructure
+    2. Access to Essential Services
+    3. Affordable Housing
+    4. Employment Generation
+    5. Food Security & Sustainable Food Systems
+    6. Socioeconomic Advancement & Empowerment
+    
+    Returns SLP compliance score across 4 components:
+    - Use of Proceeds (35%)
+    - Project Evaluation (25%)
+    - Proceeds Management (20%)
+    - Reporting (20%)
+    """
+    try:
+        result = validate_social_loan(
+            loan_id=request.loan_id,
+            loan_purpose=request.loan_purpose,
+        )
+        
+        # Save assessment to BigQuery
+        if result.get("success") and result.get("is_social_loan"):
+            save_social_loan_assessment(request.loan_id, result)
+        
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Social loan validation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/social/loan/{loan_id} - Get social loan details
+@router.get("/social/loan/{loan_id}")
+async def get_social_loan_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+) -> Dict[str, Any]:
+    """
+    Get social loan classification and compliance details.
+    
+    Returns existing assessment or triggers new validation.
+    """
+    try:
+        # First try to get existing assessment via validation (returns cached)
+        result = validate_social_loan(loan_id=loan_id)
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Get social loan error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/social/impact/{loan_id} - Get social impact metrics
+@router.get("/social/impact/{loan_id}")
+async def get_social_impact_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+) -> Dict[str, Any]:
+    """
+    Get social impact metrics for a loan.
+    
+    Returns impact KPIs, beneficiary data, and reporting status.
+    Implements ICMA Handbook 2025 recommended social KPIs.
+    """
+    try:
+        result = get_social_loan_impact(loan_id=loan_id)
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Get social impact error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# PUT /api/social/impact/{loan_id} - Update impact metrics
+@router.put("/social/impact/{loan_id}")
+async def update_social_impact_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+    request: SocialImpactUpdateRequest = None,
+) -> Dict[str, Any]:
+    """
+    Update social impact metrics for a loan.
+    
+    Supports metrics like:
+    - beneficiaries_reached
+    - jobs_created
+    - housing_units_created
+    - students_enrolled
+    - etc.
+    """
+    try:
+        result = update_social_impact(
+            loan_id=loan_id,
+            metrics=request.metrics if request else {},
+        )
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Update social impact error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/social/report/{loan_id} - Generate impact report
+@router.get("/social/report/{loan_id}")
+async def generate_social_report_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+) -> Dict[str, Any]:
+    """
+    Generate annual impact report for a social loan.
+    
+    Required by SLP 2025 Component 4 (mandatory annual reporting).
+    """
+    try:
+        result = generate_social_impact_report(loan_id=loan_id)
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Generate social report error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/social/summary - Get portfolio summary
+@router.get("/social/summary")
+async def get_social_summary_endpoint() -> Dict[str, Any]:
+    """
+    Get portfolio-level social loan summary.
+    
+    Returns aggregated data across all social loans:
+    - Total loans by category
+    - Total beneficiaries
+    - Average compliance scores
+    """
+    try:
+        result = get_social_loan_summary()
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Get social summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/social/portfolio-impact - Get portfolio impact
+@router.get("/social/portfolio-impact")
+async def get_portfolio_impact_endpoint() -> Dict[str, Any]:
+    """
+    Get portfolio-wide social impact aggregation.
+    
+    Aggregates impact metrics across all social loans.
+    """
+    try:
+        result = get_portfolio_social_impact()
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Get portfolio impact error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# GET /api/social/categories - Get SLP eligible categories
+@router.get("/social/categories")
+async def get_social_categories_endpoint() -> Dict[str, Any]:
+    """
+    Get list of SLP eligible social project categories.
+    
+    Based on SLP March 2025 Appendix 1.
+    """
+    return {
+        "success": True,
+        "slp_version": "March 2025",
+        "categories": SLP_CATEGORIES,
+        "target_populations": SLP_TARGET_POPULATIONS,
+        "category_kpis": SOCIAL_KPIS,
+    }
+
+
+# ============================================
+# Report Export Endpoints (NEW - V10.1)
+# ============================================
+
+# POST /api/reports/tlp/{loan_id}/pdf - Generate TLP PDF Report
+@router.post("/reports/tlp/{loan_id}/pdf")
+async def generate_tlp_pdf_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+) -> Response:
+    """
+    Generate LMA-compliant TLP PDF report for a transition loan.
+    
+    Based on LMA TLP Principle 5 (Reporting) - October 2025.
+    Includes all mandatory sections:
+    1. List of Transition Projects
+    2. Amounts allocated
+    3. Expected impact
+    4. Achieved impact
+    """
+    try:
+        from esg_service.tools.tlp_report_pdf import generate_tlp_pdf
+        
+        pdf_bytes = generate_tlp_pdf(loan_id)
+        
+        filename = f"TLP_Report_{loan_id}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except Exception as e:
+        logger.exception(f"TLP PDF generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/reports/tlp/portfolio/pdf - Generate Portfolio TLP PDF
+@router.post("/reports/tlp/portfolio/pdf")
+async def generate_tlp_portfolio_pdf_endpoint() -> Response:
+    """
+    Generate portfolio-level TLP PDF report.
+    
+    Summarizes all transition loans in the portfolio.
+    """
+    try:
+        from esg_service.tools.tlp_report_pdf import generate_tlp_portfolio_pdf
+        
+        pdf_bytes = generate_tlp_portfolio_pdf()
+        
+        filename = f"TLP_Portfolio_Report_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except Exception as e:
+        logger.exception(f"TLP portfolio PDF error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/reports/pptx/loan/{loan_id} - Generate Loan PowerPoint
+@router.post("/reports/pptx/loan/{loan_id}")
+async def generate_loan_pptx_endpoint(
+    loan_id: str = Path(..., description="Loan identifier"),
+) -> Response:
+    """
+    Generate Risk Committee PowerPoint presentation for a loan.
+    
+    Creates 8-slide board-ready presentation with:
+    - Executive summary
+    - Covenant compliance overview
+    - ML breach predictions
+    - ESG/TLP status
+    - Recommendations
+    """
+    try:
+        from common.pptx_report_generator import generate_loan_pptx
+        from common.bigquery_client import BigQueryClient
+        
+        bq = BigQueryClient()
+        
+        # Get loan data
+        loan_query = f"""
+            SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            WHERE loan_id = '{loan_id}'
+        """
+        loans = bq.execute_query(loan_query)
+        if not loans:
+            raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+        
+        loan_data = loans[0]
+        
+        # Get covenants
+        cov_query = f"""
+            SELECT * FROM `{bq.project_id}.{bq.dataset_id}.covenant_measurements`
+            WHERE loan_id = '{loan_id}'
+            ORDER BY measurement_date DESC
+        """
+        covenants = bq.execute_query(cov_query) or []
+        
+        # Get predictions
+        pred_query = f"""
+            SELECT * FROM `{bq.project_id}.{bq.dataset_id}.ml_predictions`
+            WHERE loan_id = '{loan_id}'
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        """
+        predictions = bq.execute_query(pred_query)
+        predictions = predictions[0] if predictions else None
+        
+        # Get ESG data
+        esg_query = f"""
+            SELECT * FROM `{bq.project_id}.{bq.dataset_id}.esg_assessments`
+            WHERE loan_id = '{loan_id}'
+            ORDER BY assessment_date DESC
+            LIMIT 1
+        """
+        esg_data = bq.execute_query(esg_query)
+        esg_data = esg_data[0] if esg_data else None
+        
+        # Generate presentation
+        pptx_bytes = generate_loan_pptx(loan_data, covenants, predictions, esg_data)
+        
+        filename = f"Risk_Committee_{loan_id}_{datetime.now().strftime('%Y%m%d')}.pptx"
+        
+        return Response(
+            content=pptx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"PPTX generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# POST /api/reports/pptx/portfolio - Generate Portfolio PowerPoint
+@router.post("/reports/pptx/portfolio")
+async def generate_portfolio_pptx_endpoint() -> Response:
+    """
+    Generate Risk Committee PowerPoint for entire portfolio.
+    
+    Creates portfolio-level board presentation with aggregated metrics.
+    """
+    try:
+        from common.pptx_report_generator import generate_portfolio_pptx
+        from common.bigquery_client import BigQueryClient
+        
+        bq = BigQueryClient()
+        
+        # Get portfolio summary
+        summary_query = f"""
+            SELECT 
+                COUNT(*) as total_loans,
+                SUM(facility_amount) as total_exposure,
+                COUNTIF(overall_status = 'GREEN') as loans_compliant,
+                COUNTIF(overall_status = 'AMBER') as loans_warning,
+                COUNTIF(overall_status = 'RED') as loans_breach,
+                AVG(esg_score) as esg_average_score
+            FROM `{bq.project_id}.{bq.dataset_id}.loans`
+        """
+        summary_result = bq.execute_query(summary_query)
+        summary = summary_result[0] if summary_result else {}
+        
+        # Get loans
+        loans_query = f"""
+            SELECT * FROM `{bq.project_id}.{bq.dataset_id}.loans`
+            ORDER BY facility_amount DESC
+            LIMIT 50
+        """
+        loans = bq.execute_query(loans_query) or []
+        
+        # Generate presentation
+        pptx_bytes = generate_portfolio_pptx(summary, loans)
+        
+        filename = f"Risk_Committee_Portfolio_{datetime.now().strftime('%Y%m%d')}.pptx"
+        
+        return Response(
+            content=pptx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except Exception as e:
+        logger.exception(f"Portfolio PPTX error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Export router
 __all__ = ["router"]
+

@@ -34,6 +34,7 @@ import { ECLSummaryCard } from "@/components/ecl-summary-card";
 import { WhatIfCard } from "@/components/what-if-card";
 import { ESGFinancialRiskCard } from "@/components/esg-financial-risk-card";
 import { RiskCommitteeCard } from "@/components/risk-committee-card";
+import { ExportPptxButton } from "@/components/export-button";
 
 // API base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -244,10 +245,13 @@ export default function AnalyticsPage() {
             <h1 className="text-3xl font-bold text-slate-900">Portfolio Analytics</h1>
             <p className="text-slate-500">Real-time risk monitoring and KPIs</p>
           </div>
-          <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <ExportPptxButton variant="outline" />
+            <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Honeycomb KPI Grid */}

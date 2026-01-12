@@ -1309,3 +1309,205 @@ export async function fetchSLLPortfolioSummary(): Promise<{
   return apiRequest("/api/sll/portfolio/summary");
 }
 
+
+// ============================================
+// Social Loans Module API Functions
+// Based on LMA Social Loan Principles (SLP March 2025)
+// ============================================
+
+export interface SocialLoanValidation {
+  success: boolean;
+  loan_id: string;
+  is_social_loan: boolean;
+  is_slp_compliant: boolean;
+  social_category: string;
+  target_populations: string[];
+  scores: {
+    overall: number;
+    use_of_proceeds: number;
+    project_evaluation: number;
+    proceeds_management: number;
+    reporting: number;
+  };
+  compliance_threshold: number;
+  recommendations: string[];
+  assessment_date: string;
+  slp_version: string;
+}
+
+export interface SocialLoanClassification {
+  success: boolean;
+  loan_id: string;
+  social_category: string;
+  target_populations: string[];
+  is_slp_compliant: boolean;
+  scores: {
+    overall: number;
+    use_of_proceeds: number;
+    project_evaluation: number;
+    proceeds_management: number;
+    reporting: number;
+  };
+  verification_status: string;
+  assessment_date: string;
+}
+
+export interface SocialImpactMetrics {
+  success: boolean;
+  loan_id: string;
+  social_category: string;
+  expected_beneficiaries: number;
+  actual_beneficiaries: number;
+  impact_kpis: Record<string, number>;
+  geographic_area: string;
+  measurement_date: string;
+}
+
+export interface SocialLoanReport {
+  success: boolean;
+  loan_id: string;
+  report_type: string;
+  social_category: string;
+  target_populations: string[];
+  beneficiary_data: {
+    expected: number;
+    actual: number;
+    achievement_rate: number;
+  };
+  impact_summary: string;
+  slp_compliance: boolean;
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface SocialPortfolioSummary {
+  success: boolean;
+  total_social_loans: number;
+  by_category: Array<{
+    category: string;
+    loan_count: number;
+    avg_score: number;
+    beneficiaries: number;
+  }>;
+  slp_version: string;
+}
+
+export interface SLPCategories {
+  categories: string[];
+  target_populations: string[];
+  slp_version: string;
+}
+
+export async function validateSocialLoan(
+  loanId: string,
+  loanPurpose: string
+): Promise<SocialLoanValidation> {
+  return apiRequest("/api/esg/social/validate", {
+    method: "POST",
+    body: JSON.stringify({ loan_id: loanId, loan_purpose: loanPurpose }),
+  });
+}
+
+export async function fetchSocialLoan(loanId: string): Promise<SocialLoanClassification> {
+  return apiRequest(`/api/esg/social/loan/${loanId}`);
+}
+
+export async function fetchSocialImpact(loanId: string): Promise<SocialImpactMetrics> {
+  return apiRequest(`/api/esg/social/impact/${loanId}`);
+}
+
+export async function updateSocialImpact(
+  loanId: string,
+  data: {
+    expected_beneficiaries?: number;
+    actual_beneficiaries?: number;
+    geographic_area?: string;
+  }
+): Promise<{ success: boolean; loan_id: string; updated: boolean }> {
+  return apiRequest(`/api/esg/social/impact/${loanId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchSocialLoanReport(loanId: string): Promise<SocialLoanReport> {
+  return apiRequest(`/api/esg/social/report/${loanId}`);
+}
+
+export async function fetchSocialPortfolioSummary(): Promise<SocialPortfolioSummary> {
+  return apiRequest("/api/esg/social/summary");
+}
+
+export async function fetchSocialPortfolioImpact(): Promise<{
+  success: boolean;
+  total_social_loans: number;
+  total_expected_beneficiaries: number;
+  total_actual_beneficiaries: number;
+  overall_achievement_rate: number;
+  by_category: Array<{
+    category: string;
+    expected: number;
+    actual: number;
+  }>;
+}> {
+  return apiRequest("/api/esg/social/portfolio-impact");
+}
+
+export async function fetchSLPCategories(): Promise<SLPCategories> {
+  return apiRequest("/api/esg/social/categories");
+}
+
+// ============================================
+// Report Export Functions (V10.1)
+// ============================================
+
+/**
+ * Export loan-level Risk Committee PowerPoint presentation.
+ */
+export async function exportLoanPptx(loanId: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/esg/reports/pptx/loan/${loanId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) throw new Error(`PPTX export failed: ${response.status}`);
+  return response.blob();
+}
+
+/**
+ * Export portfolio-level Risk Committee PowerPoint presentation.
+ */
+export async function exportPortfolioPptx(): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/esg/reports/pptx/portfolio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) throw new Error(`Portfolio PPTX export failed: ${response.status}`);
+  return response.blob();
+}
+
+/**
+ * Export TLP PDF report for a transition loan.
+ * LMA TLP Principle 5 compliant.
+ */
+export async function exportTlpPdf(loanId: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/esg/reports/tlp/${loanId}/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) throw new Error(`TLP PDF export failed: ${response.status}`);
+  return response.blob();
+}
+
+/**
+ * Export portfolio-level TLP PDF report.
+ */
+export async function exportTlpPortfolioPdf(): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/esg/reports/tlp/portfolio/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) throw new Error(`TLP Portfolio PDF export failed: ${response.status}`);
+  return response.blob();
+}
+
+

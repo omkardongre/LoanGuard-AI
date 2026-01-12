@@ -31,6 +31,7 @@ import {
   FileText,
   Flame,
 } from "lucide-react";
+import { ExportTlpPdfButton } from "@/components/export-button";
 import {
   fetchLoans,
   validateTransitionLoan,
@@ -216,6 +217,7 @@ export default function TransitionLoansPage() {
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
               LMA TLP Oct 2025
             </Badge>
+            <ExportTlpPdfButton variant="outline" />
             <Button variant="outline" onClick={loadData}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh

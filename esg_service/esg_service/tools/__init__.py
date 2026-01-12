@@ -270,3 +270,43 @@ from esg_service.esg_service.tools.sfdr_classifier import (
     get_sfdr_migration_analysis,
 )
 
+
+# Social Loans Module (SLP March 2025)
+from esg_service.esg_service.tools.social_loan_validator import (
+    SocialLoanValidatorAgent,
+    get_social_loan_validator,
+    validate_social_loan,
+    get_social_loan_summary,
+    save_social_loan_assessment,
+    SLP_CATEGORIES,
+    SLP_TARGET_POPULATIONS,
+)
+
+from esg_service.esg_service.tools.social_impact_tracker import (
+    SocialImpactTrackerAgent,
+    get_social_impact_tracker,
+    get_social_loan_impact,
+    update_social_impact,
+    generate_social_impact_report,
+    get_portfolio_social_impact,
+    SOCIAL_KPIS,
+)
+
+# Update __all__ to include Social Loans Module
+__all__.extend([
+    # Social Loans Module (SLP March 2025)
+    "SocialLoanValidatorAgent",
+    "get_social_loan_validator",
+    "validate_social_loan",
+    "get_social_loan_summary",
+    "save_social_loan_assessment",
+    "SLP_CATEGORIES",
+    "SLP_TARGET_POPULATIONS",
+    "SocialImpactTrackerAgent",
+    "get_social_impact_tracker",
+    "get_social_loan_impact",
+    "update_social_impact",
+    "generate_social_impact_report",
+    "get_portfolio_social_impact",
+    "SOCIAL_KPIS",
+])

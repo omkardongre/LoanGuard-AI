@@ -135,42 +135,69 @@ def get_notification_recipients(
     severity: str,
 ) -> Dict[str, Any]:
     """
-    Get notification recipients based on severity.
-
+    Get notification recipients based on severity from BigQuery.
+    
+    Fetches real email addresses from notification_config table.
+    No hardcoded or mock data.
+    
     Args:
         loan_id: Loan identifier
-        severity: Alert severity
+        severity: Alert severity (CRITICAL, HIGH, MEDIUM, LOW)
 
     Returns:
-        Recipient list
+        Recipient configuration with real emails from database
     """
-    # Mock recipient configuration
-    # In production, fetch from database
-    recipients = {
-        "CRITICAL": {
-            "emails": ["risk-team@bank.com", "credit-head@bank.com", "cro@bank.com"],
-            "slack_channels": ["#critical-alerts", "#risk-management"],
-        },
-        "HIGH": {
-            "emails": ["risk-team@bank.com", "loan-officer@bank.com"],
-            "slack_channels": ["#loan-alerts"],
-        },
-        "MEDIUM": {
-            "emails": ["loan-officer@bank.com"],
-            "slack_channels": ["#loan-monitoring"],
-        },
-        "LOW": {
-            "emails": [],
-            "slack_channels": ["#loan-monitoring"],
-        },
-    }
-
-    config = recipients.get(severity.upper(), recipients["LOW"])
-
-    return {
-        "success": True,
-        "loan_id": loan_id,
-        "severity": severity,
-        "email_recipients": config["emails"],
-        "slack_channels": config["slack_channels"],
-    }
+    from common.bigquery_client import get_bigquery_client
+    
+    try:
+        bq_client = get_bigquery_client()
+        
+        # Query real recipients from BigQuery
+        query = f"""
+        SELECT 
+            role,
+            email,
+            slack_channel
+        FROM `{bq_client.project_id}.{bq_client.dataset_id}.notification_config`
+        WHERE severity = '{severity}'
+          AND active = true
+        ORDER BY role
+        """
+        
+        results = bq_client.execute_query(query)
+        
+        if not results:
+            logger.warning(f"No recipients configured in database for severity: {severity}")
+            return {
+                "success": False,
+                "error": f"No recipients found for severity {severity}",
+                "loan_id": loan_id,
+                "severity": severity,
+                "email_recipients": [],
+                "slack_channels": [],
+            }
+        
+        # Extract emails and slack channels from database results
+        emails = [row['email'] for row in results]
+        slack_channels = list(set([row['slack_channel'] for row in results if row.get('slack_channel')]))
+        
+        logger.info(f"Found {len(emails)} recipients for {severity} severity from database")
+        
+        return {
+            "success": True,
+            "loan_id": loan_id,
+            "severity": severity,
+            "email_recipients": emails,
+            "slack_channels": slack_channels,
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch recipients from database: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "loan_id": loan_id,
+            "severity": severity,
+            "email_recipients": [],
+            "slack_channels": [],
+        }

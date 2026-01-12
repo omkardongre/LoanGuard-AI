@@ -2209,6 +2209,127 @@ async def generate_portfolio_pptx_endpoint() -> Response:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================
+# EMAIL ALERT ENDPOINTS
+# ============================================
+
+class CovenantBreachEmail(BaseModel):
+    """Request to send covenant breach email alert."""
+    loan_id: str = Field(..., description="Loan identifier")
+    breach_type: str = Field(..., description="Type of covenant breached")
+    threshold: str = Field(..., description="Covenant threshold value")
+    actual_value: str = Field(..., description="Actual value that caused breach")
+    severity: str = Field(default="HIGH", description="Breach severity: HIGH, MEDIUM, LOW")
+
+
+class PortfolioSummaryEmail(BaseModel):
+    """Request to send portfolio summary email."""
+    period: str = Field(default="weekly", description="Reporting period: weekly, monthly")
+    recipients: Optional[List[str]] = Field(None, description="Email recipients (optional)")
+
+
+@router.post("/alerts/email/covenant-breach")
+async def send_covenant_breach_email(request: CovenantBreachEmail):
+    """
+    Send covenant breach alert email to Risk Committee.
+    
+    Generates professional email using Gemini and sends via SendGrid.
+    Recipients determined by breach severity.
+    """
+    try:
+        from esg_service.esg_service.tools import send_covenant_breach_alert
+        
+        result = send_covenant_breach_alert(
+            loan_id=request.loan_id,
+            breach_type=request.breach_type,
+            threshold=request.threshold,
+            actual_value=request.actual_value,
+            severity=request.severity,
+        )
+        
+        if not result.get('success'):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get('error', 'Failed to send email')
+            )
+        
+        return {
+            "success": True,
+            "loan_id": request.loan_id,
+            "recipients": result.get('recipients', []),
+            "subject": result.get('subject', ''),
+            "message": "Covenant breach alert email sent successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Covenant breach email error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/alerts/email/portfolio-summary")
+async def send_portfolio_summary_email(request: PortfolioSummaryEmail):
+    """
+    Send portfolio summary email to senior management.
+    
+    Generates comprehensive portfolio report using BigQuery metrics
+    and sends formatted email via SendGrid.
+    """
+    try:
+        from esg_service.esg_service.tools import send_portfolio_summary
+        
+        result = send_portfolio_summary(
+            period=request.period,
+            recipients=request.recipients,
+        )
+        
+        if not result.get('success'):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get('error', 'Failed to send email')
+            )
+        
+        return {
+            "success": True,
+            "period": request.period,
+            "recipients": result.get('recipients', []),
+            "subject": result.get('subject', ''),
+            "message": f"{request.period.capitalize()} portfolio summary sent successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Portfolio summary email error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/alerts/email/status")
+async def get_email_status():
+    """
+    Check email configuration status.
+    
+    Verifies SendGrid API key configuration and connectivity.
+    """
+    try:
+        import os
+        from alert_service.alert_service.config import SENDGRID_API_KEY, SENDGRID_FROM_EMAIL
+        
+        configured = bool(SENDGRID_API_KEY and SENDGRID_API_KEY != "")
+        
+        return {
+            "success": True,
+            "configured": configured,
+            "from_email": SENDGRID_FROM_EMAIL if configured else None,
+            "message": "SendGrid ready" if configured else "SendGrid API key not configured",
+        }
+        
+    except Exception as e:
+        logger.exception(f"Email status check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Export router
 __all__ = ["router"]
 

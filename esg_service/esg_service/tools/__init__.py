@@ -292,6 +292,13 @@ from esg_service.esg_service.tools.social_impact_tracker import (
     SOCIAL_KPIS,
 )
 
+# Email Alert Agent (SendGrid Integration)
+from esg_service.esg_service.tools.email_alert_agent import (
+    EmailAlertAgent,
+    send_covenant_breach_alert,
+    send_portfolio_summary,
+)
+
 # Update __all__ to include Social Loans Module
 __all__.extend([
     # Social Loans Module (SLP March 2025)
@@ -309,4 +316,8 @@ __all__.extend([
     "generate_social_impact_report",
     "get_portfolio_social_impact",
     "SOCIAL_KPIS",
+    # Email Alert Agent
+    "EmailAlertAgent",
+    "send_covenant_breach_alert",
+    "send_portfolio_summary",
 ])

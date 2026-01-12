@@ -35,6 +35,7 @@ import { WhatIfCard } from "@/components/what-if-card";
 import { ESGFinancialRiskCard } from "@/components/esg-financial-risk-card";
 import { RiskCommitteeCard } from "@/components/risk-committee-card";
 import { ExportPptxButton } from "@/components/export-button";
+import { SendEmailButton } from "@/components/send-email-button";
 
 // API base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -246,6 +247,11 @@ export default function AnalyticsPage() {
             <p className="text-slate-500">Real-time risk monitoring and KPIs</p>
           </div>
           <div className="flex gap-2">
+            <SendEmailButton
+              variant="portfolio-summary"
+              period="weekly"
+              size="default"
+            />
             <ExportPptxButton variant="outline" />
             <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
               <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />

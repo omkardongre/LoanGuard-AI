@@ -331,10 +331,10 @@ class RiskCommitteePresentation:
             status_color = self._get_status_color(status)
             
             row_data = [
-                cov.get("name", cov.get("covenant_type", "N/A")),
-                str(cov.get("threshold", "N/A")),
+                cov.get("name", cov.get("covenant_type", cov.get("description", "N/A"))),
+                str(cov.get("threshold", cov.get("threshold_value", "N/A"))),
                 str(cov.get("actual", cov.get("actual_value", "N/A"))),
-                f"{cov.get('buffer_pct', 0):.1f}%",
+                f"{cov.get('buffer_pct', cov.get('buffer_percentage', 0)) or 0:.1f}%",
                 status,
             ]
             
@@ -982,13 +982,16 @@ class RiskCommitteePresentation:
         # Executive summary
         self._add_executive_summary_slide(prs, summary)
         
-        # Top covenants (aggregate from all loans)
-        all_covenants = []
-        for loan in loans[:10]:
-            covenants = loan.get("covenants", [])
-            for cov in covenants:
-                cov["loan_id"] = loan.get("loan_id")
-                all_covenants.append(cov)
+        # Top covenants - first check summary for pre-fetched covenants, else aggregate from loans
+        all_covenants = summary.get("covenants", []) if summary.get("covenants") else []
+        
+        # If no pre-fetched covenants, try to aggregate from loans
+        if not all_covenants:
+            for loan in loans[:10]:
+                covenants = loan.get("covenants", [])
+                for cov in covenants:
+                    cov["loan_id"] = loan.get("loan_id")
+                    all_covenants.append(cov)
         
         self._add_covenant_slide(prs, all_covenants[:7])
         

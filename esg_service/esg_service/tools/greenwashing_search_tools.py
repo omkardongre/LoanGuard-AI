@@ -512,31 +512,65 @@ class GreenwashingDetector:
         contradictions: List[SearchResult],
         supporting: List[SearchResult],
     ) -> float:
-        """Calculate verification score (0-1, higher = more trustworthy)."""
+        """
+        Calculate verification score (0-1, higher = more trustworthy).
+        
+        V8.1 FIX: Improved algorithm to prevent 0% scores and provide
+        more nuanced scoring based on evidence ratio.
+        
+        Scoring logic:
+        - Base score starts at 0.5
+        - Language quality can add up to +0.4
+        - Contradictions reduce score (max -0.35 to preserve floor)
+        - Supporting evidence adds up to +0.15
+        - Evidence ratio impacts final score
+        - Minimum floor of 0.05 (5%) for any analyzed claim
+        """
         base_score = 0.5
         
-        # Language quality adjustments
+        # Language quality adjustments (+0.4 max)
         if language_analysis["has_numbers"]:
-            base_score += 0.15
+            base_score += 0.15  # Has quantifiable metrics
         if language_analysis["has_timeline"]:
-            base_score += 0.1
+            base_score += 0.10  # Has specific timeline
         if language_analysis["has_verification"]:
-            base_score += 0.15
+            base_score += 0.15  # Claims third-party verification
         
-        # Vague terms penalty
-        base_score -= len(language_analysis["vague_terms"]) * 0.05
+        # Vague terms penalty (max -0.15)
+        vague_penalty = min(len(language_analysis["vague_terms"]) * 0.03, 0.15)
+        base_score -= vague_penalty
         
         # External evidence adjustments
         high_severity_contradictions = sum(
             1 for c in contradictions if c.severity == "HIGH"
         )
-        base_score -= high_severity_contradictions * 0.2
-        base_score -= (len(contradictions) - high_severity_contradictions) * 0.1
+        medium_severity_contradictions = len(contradictions) - high_severity_contradictions
         
-        # Supporting evidence
-        base_score += len(supporting) * 0.05
+        # Cap contradiction penalties to preserve meaningful scores
+        # HIGH severity: -0.12 each (max 3 = -0.36)
+        # MEDIUM severity: -0.06 each (max 3 = -0.18)
+        high_penalty = min(high_severity_contradictions * 0.12, 0.36)
+        medium_penalty = min(medium_severity_contradictions * 0.06, 0.18)
         
-        return max(0.0, min(1.0, base_score))
+        # Total contradiction penalty capped at 0.35
+        contradiction_penalty = min(high_penalty + medium_penalty, 0.35)
+        base_score -= contradiction_penalty
+        
+        # Supporting evidence bonus (+0.04 each, max +0.15)
+        supporting_bonus = min(len(supporting) * 0.04, 0.15)
+        base_score += supporting_bonus
+        
+        # Evidence ratio adjustment: if supporting outweighs contradicting
+        if supporting and contradictions:
+            ratio = len(supporting) / len(contradictions)
+            if ratio > 1.5:
+                base_score += 0.05  # More supporting than contradicting
+            elif ratio < 0.5:
+                base_score -= 0.05  # Much more contradicting
+        
+        # Ensure minimum floor of 5% for any analyzed claim
+        # (0% suggests no analysis was done, which is misleading)
+        return max(0.05, min(1.0, base_score))
     
     def _get_verdict(self, score: float) -> ClaimVerdict:
         """Get verification verdict based on score."""

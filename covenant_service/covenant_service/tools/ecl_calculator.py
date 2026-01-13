@@ -88,14 +88,18 @@ class PortfolioECLResult:
     total_ecl: float
     ecl_coverage_ratio: float  # ECL as % of EAD
     
+    # Weighted averages
+    weighted_avg_pd: float = 0.0  # EAD-weighted average PD
+    weighted_avg_lgd: float = 0.0  # EAD-weighted average LGD
+    
     # Stage breakdown
-    stage_summary: Dict[int, Dict[str, Any]]
+    stage_summary: Dict[int, Dict[str, Any]] = None
     
     # Sector breakdown
-    sector_summary: Dict[str, Dict[str, Any]]
+    sector_summary: Dict[str, Dict[str, Any]] = None
     
     # Individual results
-    loan_results: List[ECLResult]
+    loan_results: List[ECLResult] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -105,10 +109,12 @@ class PortfolioECLResult:
                 "total_ead": round(self.total_ead, 2),
                 "total_ecl": round(self.total_ecl, 2),
                 "ecl_coverage_ratio_pct": round(self.ecl_coverage_ratio, 2),
+                "weighted_avg_pd": round(self.weighted_avg_pd, 4),
+                "weighted_avg_lgd": round(self.weighted_avg_lgd, 4),
             },
-            "stage_breakdown": self.stage_summary,
-            "sector_breakdown": self.sector_summary,
-            "loan_results": [r.to_dict() for r in self.loan_results[:100]],
+            "stage_breakdown": self.stage_summary or {},
+            "sector_breakdown": self.sector_summary or {},
+            "loan_results": [r.to_dict() for r in (self.loan_results or [])[:100]],
         }
 
 
@@ -324,12 +330,22 @@ class ECLCalculator:
             sector_summary[sector]["total_ecl"] = round(ecl, 2)
             del sector_summary[sector]["pd_sum"]
         
+        # Calculate EAD-weighted average PD and LGD
+        if total_ead > 0:
+            weighted_avg_pd = sum(r.pd_12m * r.ead for r in loan_results) / total_ead
+            weighted_avg_lgd = sum(r.lgd * r.ead for r in loan_results) / total_ead
+        else:
+            weighted_avg_pd = 0.0
+            weighted_avg_lgd = 0.0
+        
         return PortfolioECLResult(
             calculation_date=datetime.utcnow().isoformat(),
             loan_count=len(loans),
             total_ead=total_ead,
             total_ecl=total_ecl,
             ecl_coverage_ratio=ecl_coverage_ratio,
+            weighted_avg_pd=weighted_avg_pd,
+            weighted_avg_lgd=weighted_avg_lgd,
             stage_summary=stage_summary,
             sector_summary=sector_summary,
             loan_results=loan_results,

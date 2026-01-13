@@ -48,7 +48,7 @@ def validate_us_phone_number(phone_number: str) -> Dict[str, Any]:
         Dict with 'valid', 'error', and 'normalized' fields
     """
     # Remove all non-digit characters
-    digits_only = re.sub(r'\\D', '', phone_number)
+    digits_only = re.sub(r'\D', '', phone_number)
     
     # Check for valid US number patterns
     if len(digits_only) == 10:

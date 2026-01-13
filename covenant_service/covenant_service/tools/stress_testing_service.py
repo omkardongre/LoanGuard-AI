@@ -309,25 +309,48 @@ class ProductionStressTestingService:
         self,
         loans: List[Dict[str, Any]],
         n_simulations: int = 10000,
+        pd_multiplier: float = 1.0,
+        lgd_multiplier: float = 1.0,
+        correlation: float = 0.2,
     ) -> Dict[str, Any]:
         """
         Run Monte Carlo VaR with REAL ML predictions.
+        
+        Args:
+            loans: List of loan dictionaries
+            n_simulations: Number of Monte Carlo simulations
+            pd_multiplier: Stress multiplier for PD (1.0 = base, 2.0 = double)
+            lgd_multiplier: Stress multiplier for LGD (1.0 = base, 1.5 = 50% increase)
+            correlation: Gaussian copula correlation between defaults
         """
-        # Enhance loans with real predictions
+        # Enhance loans with real predictions AND apply stress multipliers
         enhanced_loans = []
         for loan in loans:
             enhanced = loan.copy()
-            enhanced['breach_probability'] = self.get_real_pd(loan)
-            enhanced['lgd'] = self.get_real_lgd(loan)
+            base_pd = self.get_real_pd(loan)
+            base_lgd = self.get_real_lgd(loan)
+            
+            # Apply stress multipliers (capped at reasonable limits)
+            stressed_pd = min(base_pd * pd_multiplier, 0.99)  # Cap at 99%
+            stressed_lgd = min(base_lgd * lgd_multiplier, 1.0)  # Cap at 100%
+            
+            enhanced['breach_probability'] = stressed_pd
+            enhanced['lgd'] = stressed_lgd
             enhanced_loans.append(enhanced)
         
-        # Run Monte Carlo
+        # Run Monte Carlo with explicit correlation
         simulator = MonteCarloSimulator(n_simulations=n_simulations, seed=42)
-        result = simulator.run_simulation(enhanced_loans)
+        result = simulator.run_simulation(enhanced_loans, correlation=correlation)
         
-        # Add ML model info
+        # Add ML model info and stress info
         mc_result = result.to_dict()
         mc_result['production_level'] = True
+        mc_result['stress_parameters'] = {
+            'pd_multiplier': pd_multiplier,
+            'lgd_multiplier': lgd_multiplier,
+            'correlation': correlation,
+            'is_stressed': pd_multiplier > 1.0 or lgd_multiplier > 1.0,
+        }
         mc_result['ml_models'] = {
             'pd': 'LightGBM-v2.0 (720K Lending Club loans)',
             'lgd': 'TwoStage-v2.0 (Recovery Rate Model)',

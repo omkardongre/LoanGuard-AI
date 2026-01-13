@@ -209,18 +209,24 @@ export default function SLLMonitoringPage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">SLL Monitoring</h1>
-            <p className="text-slate-500">
-              KPIs, SPTs & Margin Adjustments per LMA SLLP
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 shadow-lg">
+              <Target className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">SLL Monitoring</h1>
+              <p className="text-slate-500">
+                KPIs, SPTs & Margin Adjustments per LMA SLLP
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+            <Badge variant="outline" className="bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border-emerald-200">
               LMA SLLP 2024
             </Badge>
-            <Button variant="outline" onClick={loadData}>
+            <Button variant="outline" onClick={loadData} className="hover:bg-blue-50 transition-colors">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -229,55 +235,70 @@ export default function SLLMonitoringPage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-teal-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Target className="h-5 w-5 text-emerald-500" />
-                <p className="text-sm text-slate-500">SLL Loans</p>
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-teal-400 to-emerald-500">
+                  <Target className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-xs text-slate-500">SLL Loans</p>
               </div>
               <p className="text-2xl font-bold text-slate-900">
                 {summary?.sll_loan_count || sllLoans.length || 0}
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Gauge className="h-5 w-5 text-blue-500" />
-                <p className="text-sm text-slate-500">KPIs Tracked</p>
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-400 to-blue-500">
+                  <Gauge className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-xs text-slate-500">KPIs Tracked</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-blue-600">
                 {summary?.total_kpis || 0}
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <FileCheck className="h-5 w-5 text-emerald-500" />
-                <p className="text-sm text-slate-500">Verification Rate</p>
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500">
+                  <FileCheck className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-xs text-slate-500">Verification</p>
               </div>
               <p className="text-2xl font-bold text-emerald-600">
                 {summary?.verification_rate || 0}%
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-indigo-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="h-5 w-5 text-blue-500" />
-                <p className="text-sm text-slate-500">SPT Achievement</p>
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-400 to-indigo-500">
+                  <CheckCircle className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-xs text-slate-500">SPT Rate</p>
               </div>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-2xl font-bold text-indigo-600">
                 {summary?.spt_achievement_rate || 0}%
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <TrendingDown className="h-5 w-5 text-amber-500" />
-                <p className="text-sm text-slate-500">Avg Margin Impact</p>
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
+                  <TrendingDown className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-xs text-slate-500">Avg Margin</p>
               </div>
               <p className="text-2xl font-bold text-amber-600">
                 {summary?.avg_margin_impact_bps || 0} bps

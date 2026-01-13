@@ -180,17 +180,26 @@ export default function UploadPage() {
 
       <main className="flex-1 p-8">
         <div className="max-w-4xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-slate-900">Document Upload</h1>
-            <p className="text-slate-500">
-              Upload loan agreements to extract covenants using Affinda AI
-            </p>
+          {/* Header */}
+          <div className="mb-8 flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg">
+              <Upload className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">Document Upload</h1>
+              <p className="text-slate-500">
+                Upload loan agreements to extract covenants using Affinda AI
+              </p>
+            </div>
           </div>
 
           {/* Loan Selection */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>1. Select Target Loan</CardTitle>
+          <Card className="mb-6 overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-slate-50 to-white border-b">
+              <CardTitle className="flex items-center gap-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-bold">1</span>
+                Select Target Loan
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <select
@@ -215,30 +224,35 @@ export default function UploadPage() {
           </Card>
 
           {/* Upload Area */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>2. Upload Documents</CardTitle>
+          <Card className="mb-6 overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-slate-50 to-white border-b">
+              <CardTitle className="flex items-center gap-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-sm font-bold">2</span>
+                Upload Documents
+              </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
+                className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${
                   isDragging
-                    ? "border-emerald-500 bg-emerald-50"
-                    : "border-slate-300 hover:border-slate-400"
+                    ? "border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 scale-[1.02]"
+                    : "border-slate-300 hover:border-emerald-400 hover:bg-slate-50"
                 }`}
               >
-                <Upload
-                  className={`h-12 w-12 mx-auto mb-4 ${
-                    isDragging ? "text-emerald-500" : "text-slate-400"
-                  }`}
-                />
-                <p className="text-lg font-medium text-slate-700 mb-1">
+                <div className={`p-4 rounded-full mx-auto mb-6 ${isDragging ? "bg-gradient-to-br from-emerald-100 to-teal-100" : "bg-slate-100"} transition-colors`}>
+                  <Upload
+                    className={`h-12 w-12 ${
+                      isDragging ? "text-emerald-500" : "text-slate-400"
+                    }`}
+                  />
+                </div>
+                <p className="text-xl font-semibold text-slate-800 mb-2">
                   Drag & drop loan documents here
                 </p>
-                <p className="text-sm text-slate-500 mb-4">or click to browse</p>
+                <p className="text-slate-500 mb-6">or click to browse your files</p>
                 <input
                   type="file"
                   multiple

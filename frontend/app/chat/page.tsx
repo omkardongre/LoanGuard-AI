@@ -150,14 +150,14 @@ export default function ChatPage() {
 
       <main className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="bg-white border-b p-4">
+        <div className="bg-gradient-to-r from-white to-slate-50 border-b p-4 shadow-sm">
           <div className="flex items-center justify-between max-w-4xl mx-auto">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 rounded-lg">
-                <Sparkles className="h-5 w-5 text-emerald-600" />
+              <div className="p-2.5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-lg">
+                <Sparkles className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h1 className="font-semibold text-slate-900">
+                <h1 className="font-semibold text-slate-900 gradient-text">
                   LoanGuard AI Assistant
                 </h1>
                 <p className="text-xs text-slate-500">
@@ -170,7 +170,7 @@ export default function ChatPage() {
               <select
                 value={selectedLoan || ""}
                 onChange={(e) => setSelectedLoan(e.target.value || null)}
-                className="px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="px-3 py-1.5 text-sm border-2 rounded-xl focus:outline-none focus:ring-0 focus:border-purple-500 transition-colors"
               >
                 <option value="">All Loans (Portfolio)</option>
                 {loans.map((loan) => (
@@ -179,7 +179,7 @@ export default function ChatPage() {
                   </option>
                 ))}
               </select>
-              <Button variant="outline" size="sm" onClick={handleClearChat}>
+              <Button variant="outline" size="sm" onClick={handleClearChat} className="rounded-xl hover:bg-slate-50">
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>

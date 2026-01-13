@@ -213,18 +213,24 @@ export default function FundFinancePage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Fund Finance</h1>
-            <p className="text-slate-500">
-              NAV Facilities, LP Transparency & ILPA Compliance
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+              <Wallet className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">Fund Finance</h1>
+              <p className="text-slate-500">
+                NAV Facilities, LP Transparency & ILPA Compliance
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+            <Badge variant="outline" className="bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-200">
               ILPA July 2024 Guidance
             </Badge>
-            <Button variant="outline" onClick={loadData}>
+            <Button variant="outline" onClick={loadData} className="hover:bg-blue-50 transition-colors">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -233,10 +239,13 @@ export default function FundFinancePage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Building className="h-5 w-5 text-blue-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-400 to-blue-500">
+                  <Building className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">NAV Facilities</p>
               </div>
               <p className="text-2xl font-bold text-slate-900">
@@ -244,10 +253,13 @@ export default function FundFinancePage() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Wallet className="h-5 w-5 text-emerald-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500">
+                  <Wallet className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">Total NAV</p>
               </div>
               <p className="text-2xl font-bold text-emerald-600">
@@ -255,21 +267,27 @@ export default function FundFinancePage() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="h-5 w-5 text-amber-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
+                  <TrendingUp className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">Avg LTV</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-amber-600">
                 {(summary?.avg_ltv || 0).toFixed(1)}%
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <ShieldCheck className="h-5 w-5 text-emerald-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                  <ShieldCheck className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">ILPA Compliant</p>
               </div>
               <p className="text-2xl font-bold text-emerald-600">

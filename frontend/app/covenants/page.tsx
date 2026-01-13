@@ -205,17 +205,24 @@ export default function CovenantsPage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              Covenant Monitoring
-            </h1>
-            <p className="text-slate-500">
-              Track covenant compliance across portfolio
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+              <Shield className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">
+                Covenant Monitoring
+              </h1>
+              <p className="text-slate-500">
+                Track covenant compliance across portfolio
+              </p>
+            </div>
           </div>
           <Button
             variant="outline"
+            className="hover:bg-blue-50 transition-colors"
             onClick={() => {
               setLoanData(new Map());
               loans.slice(0, 5).forEach((loan) => loadLoanCovenants(loan));
@@ -228,34 +235,58 @@ export default function CovenantsPage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-slate-500">Total Covenants</p>
-              <p className="text-2xl font-bold text-slate-900">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-slate-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-slate-400 to-slate-500">
+                  <Shield className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-sm text-slate-500">Total Covenants</p>
+              </div>
+              <p className="text-3xl font-bold text-slate-900">
                 {allCovenants.length}
               </p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-emerald-500">
-            <CardContent className="pt-6">
-              <p className="text-sm text-slate-500">Compliant</p>
-              <p className="text-2xl font-bold text-emerald-600">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group border-l-4 border-l-emerald-500">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500">
+                  <Shield className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-sm text-slate-500">Compliant</p>
+              </div>
+              <p className="text-3xl font-bold text-emerald-600">
                 {statusCounts.GREEN}
               </p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-amber-500">
-            <CardContent className="pt-6">
-              <p className="text-sm text-slate-500">Warning</p>
-              <p className="text-2xl font-bold text-amber-600">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group border-l-4 border-l-amber-500">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-amber-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
+                  <AlertTriangle className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-sm text-slate-500">Warning</p>
+              </div>
+              <p className="text-3xl font-bold text-amber-600">
                 {statusCounts.AMBER}
               </p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-red-500">
-            <CardContent className="pt-6">
-              <p className="text-sm text-slate-500">Breach</p>
-              <p className="text-2xl font-bold text-red-600">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group border-l-4 border-l-red-500">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-red-500 to-rose-600">
+                  <AlertTriangle className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-sm text-slate-500">Breach</p>
+              </div>
+              <p className="text-3xl font-bold text-red-600">
                 {statusCounts.RED}
               </p>
             </CardContent>

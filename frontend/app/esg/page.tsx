@@ -235,16 +235,23 @@ export default function ESGPage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">ESG Compliance</h1>
-            <p className="text-slate-500">
-              Sustainability-linked loan monitoring
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg">
+              <Leaf className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">ESG Compliance</h1>
+              <p className="text-slate-500">
+                Sustainability-linked loan monitoring
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
+              className="hover:bg-blue-50 transition-colors"
               onClick={() => {
                 setLoanData(new Map());
                 loans.slice(0, 5).forEach((loan) => loadLoanESG(loan));
@@ -254,7 +261,7 @@ export default function ESGPage() {
               Refresh
             </Button>
             <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg"
               onClick={() => (window.location.href = "/greenwashing")}
             >
               <Search className="h-4 w-4 mr-2" />
@@ -265,47 +272,59 @@ export default function ESGPage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 mb-2">
-                <Leaf className="h-5 w-5 text-emerald-500" />
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500">
+                  <Leaf className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">SLL Loans</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900">{stats.sllLoans}</p>
+              <p className="text-3xl font-bold text-slate-900">{stats.sllLoans}</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="h-5 w-5 text-emerald-500" />
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                  <CheckCircle className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">SPT Achieved</p>
               </div>
-              <p className="text-2xl font-bold text-emerald-600">
+              <p className="text-3xl font-bold text-emerald-600">
                 {stats.sptAchieved}
-                <span className="text-sm text-slate-500 font-normal">
+                <span className="text-lg text-slate-500 font-normal">
                   /{stats.sptTotal}
                 </span>
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="h-5 w-5 text-blue-500" />
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                  <TrendingUp className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">Avg KPI Progress</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-3xl font-bold text-blue-600">
                 {stats.avgProgress.toFixed(0)}%
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br from-amber-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
+                  <AlertTriangle className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">At Risk KPIs</p>
               </div>
-              <p className="text-2xl font-bold text-amber-600">{stats.atRiskKpis}</p>
+              <p className="text-3xl font-bold text-amber-600">{stats.atRiskKpis}</p>
             </CardContent>
           </Card>
         </div>

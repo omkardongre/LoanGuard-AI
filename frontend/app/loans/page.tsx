@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Upload, Search, Filter, Loader2 } from "lucide-react";
+import { Upload, Search, Filter, Loader2, FileText, Briefcase, ExternalLink, Leaf } from "lucide-react";
 import { fetchLoans, type Loan } from "@/lib/api";
 
 function formatCurrency(amount: number, currency: string = "USD") {
@@ -53,15 +53,19 @@ export default function LoansPage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              Loan Portfolio
-            </h1>
-            <p className="text-slate-500">Manage and monitor all loans</p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg">
+              <Briefcase className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">Loan Portfolio</h1>
+              <p className="text-slate-500">Manage and monitor all loans</p>
+            </div>
           </div>
           <a href="/upload">
-            <Button className="bg-emerald-600 hover:bg-emerald-700">
+            <Button className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg">
               <Upload className="h-4 w-4 mr-2" />
               Upload Document
             </Button>
@@ -70,84 +74,77 @@ export default function LoansPage() {
 
         {/* Filters */}
         <div className="flex gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <div className="flex-1 relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
             <input
               type="text"
-              placeholder="Search loans..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Search by borrower, loan ID..."
+              className="w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-0 focus:border-emerald-500 transition-colors bg-white shadow-sm"
             />
           </div>
-          <Button variant="outline">
+          <Button variant="outline" className="px-6 rounded-xl border-2 hover:bg-slate-50 hover:border-slate-300 transition-all">
             <Filter className="h-4 w-4 mr-2" />
             Filters
           </Button>
         </div>
 
         {/* Loans Table */}
-        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border shadow-lg overflow-hidden">
           <table className="w-full">
-            <thead className="bg-slate-50 border-b">
+            <thead className="bg-gradient-to-r from-slate-100 to-slate-50 border-b">
               <tr>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  Loan ID
-                </th>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  Borrower
-                </th>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  Amount
-                </th>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  Type
-                </th>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  Maturity
-                </th>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  Covenants
-                </th>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  Status
-                </th>
-                <th className="text-left p-4 font-medium text-slate-600">
-                  SLL
-                </th>
+                <th className="text-left p-4 font-semibold text-slate-700">Loan ID</th>
+                <th className="text-left p-4 font-semibold text-slate-700">Borrower</th>
+                <th className="text-left p-4 font-semibold text-slate-700">Amount</th>
+                <th className="text-left p-4 font-semibold text-slate-700">Type</th>
+                <th className="text-left p-4 font-semibold text-slate-700">Maturity</th>
+                <th className="text-left p-4 font-semibold text-slate-700">Covenants</th>
+                <th className="text-left p-4 font-semibold text-slate-700">Status</th>
+                <th className="text-left p-4 font-semibold text-slate-700">SLL</th>
               </tr>
             </thead>
             <tbody>
               {loans.map((loan) => (
                 <tr
                   key={loan.loan_id}
-                  className="border-b hover:bg-slate-50 cursor-pointer"
+                  className={`border-b hover:bg-gradient-to-r hover:from-blue-50 hover:to-transparent transition-all cursor-pointer group border-l-4 ${
+                    loan.status === "GREEN" ? "border-l-emerald-500" :
+                    loan.status === "AMBER" ? "border-l-amber-500" : "border-l-red-500"
+                  }`}
                 >
                   <td className="p-4">
                     <a
                       href={`/loans/${loan.loan_id}`}
-                      className="text-emerald-600 hover:underline font-medium"
+                      className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 group-hover:underline"
                     >
+                      <FileText className="h-4 w-4" />
                       {loan.loan_id}
                     </a>
                   </td>
-                  <td className="p-4 font-medium text-slate-900">
+                  <td className="p-4 font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                     {loan.borrower_name}
                   </td>
-                  <td className="p-4 text-slate-600">
+                  <td className="p-4 text-slate-700 font-medium">
                     {formatCurrency(loan.facility_amount, loan.currency)}
                   </td>
                   <td className="p-4 text-slate-600">
-                    {loan.loan_type || "Term Loan"}
+                    <span className="px-2 py-1 bg-slate-100 rounded-md text-sm">
+                      {loan.loan_type || "Term Loan"}
+                    </span>
                   </td>
                   <td className="p-4 text-slate-600">{loan.maturity_date}</td>
-                  <td className="p-4 text-slate-600">
-                    {loan.covenant_count || "-"}
+                  <td className="p-4">
+                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium">
+                      {loan.covenant_count || "-"}
+                    </span>
                   </td>
                   <td className="p-4">
                     <StatusBadge status={loan.status} size="sm" />
                   </td>
                   <td className="p-4">
                     {loan.is_sll && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800">
+                        <Leaf className="h-3 w-3" />
                         SLL
                       </span>
                     )}

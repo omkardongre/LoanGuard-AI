@@ -178,15 +178,21 @@ export default function AlertsPage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Alerts</h1>
-            <p className="text-slate-500">
-              {stats.unread} unacknowledged alerts
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg pulse-alert">
+              <Bell className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">Alerts</h1>
+              <p className="text-slate-500">
+                {stats.unread} unacknowledged alerts
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={loadAlerts}>
+            <Button variant="outline" onClick={loadAlerts} className="hover:bg-blue-50 transition-colors">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -194,6 +200,7 @@ export default function AlertsPage() {
               variant="outline"
               onClick={handleMarkAllRead}
               disabled={stats.unread === 0}
+              className="hover:bg-emerald-50 transition-colors"
             >
               <Check className="h-4 w-4 mr-2" />
               Mark All Read
@@ -204,68 +211,95 @@ export default function AlertsPage() {
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <Card
-            className={`cursor-pointer transition-colors ${
-              filter === "all" ? "ring-2 ring-emerald-500" : ""
+            className={`cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group ${
+              filter === "all" ? "ring-2 ring-blue-500" : ""
             }`}
             onClick={() => setFilter("all")}
           >
-            <CardContent className="pt-4 pb-4">
-              <p className="text-sm text-slate-500">All Alerts</p>
-              <p className="text-2xl font-bold">{stats.total}</p>
+            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-slate-400 to-slate-500">
+                <Bell className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">All</p>
+                <p className="text-xl font-bold">{stats.total}</p>
+              </div>
             </CardContent>
           </Card>
           <Card
-            className={`cursor-pointer transition-colors ${
-              filter === "unread" ? "ring-2 ring-emerald-500" : ""
+            className={`cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group ${
+              filter === "unread" ? "ring-2 ring-red-500" : ""
             }`}
             onClick={() => setFilter("unread")}
           >
-            <CardContent className="pt-4 pb-4">
-              <p className="text-sm text-slate-500">Unread</p>
-              <p className="text-2xl font-bold text-red-600">{stats.unread}</p>
+            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-red-500 to-rose-600">
+                <AlertTriangle className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Unread</p>
+                <p className="text-xl font-bold text-red-600">{stats.unread}</p>
+              </div>
             </CardContent>
           </Card>
           <Card
-            className={`cursor-pointer transition-colors ${
-              filter === "high" ? "ring-2 ring-emerald-500" : ""
+            className={`cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group ${
+              filter === "high" ? "ring-2 ring-orange-500" : ""
             }`}
             onClick={() => setFilter("high")}
           >
-            <CardContent className="pt-4 pb-4">
-              <p className="text-sm text-slate-500">High Priority</p>
-              <p className="text-2xl font-bold text-red-600">{stats.high}</p>
+            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500 to-red-500">
+                <XCircle className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">High</p>
+                <p className="text-xl font-bold text-orange-600">{stats.high}</p>
+              </div>
             </CardContent>
           </Card>
           <Card
-            className={`cursor-pointer transition-colors ${
-              filter === "covenant" ? "ring-2 ring-emerald-500" : ""
+            className={`cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group ${
+              filter === "covenant" ? "ring-2 ring-blue-500" : ""
             }`}
             onClick={() => setFilter("covenant")}
           >
-            <CardContent className="pt-4 pb-4">
-              <p className="text-sm text-slate-500">Covenant</p>
-              <p className="text-2xl font-bold">{stats.covenant}</p>
+            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                <Shield className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Covenant</p>
+                <p className="text-xl font-bold text-blue-600">{stats.covenant}</p>
+              </div>
             </CardContent>
           </Card>
           <Card
-            className={`cursor-pointer transition-colors ${
+            className={`cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group ${
               filter === "esg" ? "ring-2 ring-emerald-500" : ""
             }`}
             onClick={() => setFilter("esg")}
           >
-            <CardContent className="pt-4 pb-4">
-              <p className="text-sm text-slate-500">ESG</p>
-              <p className="text-2xl font-bold">{stats.esg}</p>
+            <CardContent className="pt-4 pb-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                <Leaf className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">ESG</p>
+                <p className="text-xl font-bold text-emerald-600">{stats.esg}</p>
+              </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Alerts List */}
-        <Card>
-          <CardHeader className="pb-3">
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3 bg-gradient-to-r from-slate-50 to-white border-b">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
+                <div className="p-2 rounded-lg bg-gradient-to-br from-slate-600 to-slate-700">
+                  <Bell className="h-4 w-4 text-white" />
+                </div>
                 {filter === "all"
                   ? "All Alerts"
                   : filter === "unread"
@@ -278,7 +312,7 @@ export default function AlertsPage() {
                   ? "ESG Alerts"
                   : "Alerts"}
               </CardTitle>
-              <Badge variant="outline">{filteredAlerts.length} alerts</Badge>
+              <Badge variant="outline" className="text-sm">{filteredAlerts.length} alerts</Badge>
             </div>
           </CardHeader>
           <CardContent>

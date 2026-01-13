@@ -206,19 +206,25 @@ export default function TransitionLoansPage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Transition Loans</h1>
-            <p className="text-slate-500">
-              LMA Transition Loan Principles (October 2025)
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg">
+              <ArrowRightLeft className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">Transition Loans</h1>
+              <p className="text-slate-500">
+                LMA Transition Loan Principles (October 2025)
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
-            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+            <Badge variant="outline" className="bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200">
               LMA TLP Oct 2025
             </Badge>
             <ExportTlpPdfButton variant="outline" />
-            <Button variant="outline" onClick={loadData}>
+            <Button variant="outline" onClick={loadData} className="hover:bg-blue-50 transition-colors">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -227,10 +233,13 @@ export default function TransitionLoansPage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <ArrowRightLeft className="h-5 w-5 text-amber-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
+                  <ArrowRightLeft className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">Transition Loans</p>
               </div>
               <p className="text-2xl font-bold text-slate-900">
@@ -238,10 +247,13 @@ export default function TransitionLoansPage() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="h-5 w-5 text-emerald-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500">
+                  <CheckCircle className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">TLP Compliant</p>
               </div>
               <p className="text-2xl font-bold text-emerald-600">
@@ -249,21 +261,27 @@ export default function TransitionLoansPage() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-teal-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Leaf className="h-5 w-5 text-emerald-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-teal-400 to-teal-500">
+                  <Leaf className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">Avg TLP Score</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-teal-600">
                 {(summary?.avg_tlp_score || 0).toFixed(1)}%
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-red-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Flame className="h-5 w-5 text-red-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-red-400 to-red-500">
+                  <Flame className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">High Carbon Lock-in</p>
               </div>
               <p className="text-2xl font-bold text-red-600">

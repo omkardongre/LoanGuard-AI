@@ -208,18 +208,24 @@ export default function SocialLoansPage() {
       <Sidebar />
 
       <main className="flex-1 p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Social Loans</h1>
-            <p className="text-slate-500">
-              LMA Social Loan Principles (SLP March 2025)
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 shadow-lg">
+              <Heart className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold gradient-text">Social Loans</h1>
+              <p className="text-slate-500">
+                LMA Social Loan Principles (SLP March 2025)
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
-            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+            <Badge variant="outline" className="bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border-purple-200">
               SLP March 2025
             </Badge>
-            <Button variant="outline" onClick={loadData}>
+            <Button variant="outline" onClick={loadData} className="hover:bg-purple-50 transition-colors">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -228,10 +234,13 @@ export default function SocialLoansPage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Heart className="h-5 w-5 text-purple-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-purple-400 to-purple-500">
+                  <Heart className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">Social Loans</p>
               </div>
               <p className="text-2xl font-bold text-slate-900">
@@ -239,10 +248,13 @@ export default function SocialLoansPage() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-emerald-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="h-5 w-5 text-emerald-500" />
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500">
+                  <CheckCircle className="h-4 w-4 text-white" />
+                </div>
                 <p className="text-sm text-slate-500">SLP Compliant</p>
               </div>
               <p className="text-2xl font-bold text-emerald-600">
@@ -250,24 +262,30 @@ export default function SocialLoansPage() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Users className="h-5 w-5 text-blue-500" />
-                <p className="text-sm text-slate-500">Total Beneficiaries</p>
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-400 to-blue-500">
+                  <Users className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-sm text-slate-500">Beneficiaries</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-blue-600">
                 {(summary?.by_category?.reduce((sum, c) => sum + (c.beneficiaries || 0), 0) || 0).toLocaleString()}
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+            <CardContent className="pt-6 relative">
+              <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-transparent opacity-50 group-hover:scale-150 transition-transform" />
               <div className="flex items-center gap-2 mb-2">
-                <Briefcase className="h-5 w-5 text-amber-500" />
-                <p className="text-sm text-slate-500">Categories Active</p>
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
+                  <Briefcase className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-sm text-slate-500">Categories</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-amber-600">
                 {summary?.by_category?.length || 0} / 6
               </p>
             </CardContent>

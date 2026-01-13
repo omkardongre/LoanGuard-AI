@@ -47,6 +47,7 @@ export function SendEmailButton({
 }: SendEmailButtonProps) {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [emailInput, setEmailInput] = React.useState("");
   const [result, setResult] = React.useState<{
     success: boolean;
     message: string;
@@ -80,9 +81,14 @@ export function SendEmailButton({
           recipients: response.recipients,
         });
       } else {
+        // Use user-entered email or default recipients
+        const targetRecipients = emailInput.trim() 
+          ? [emailInput.trim()] 
+          : recipients;
+          
         const request: PortfolioSummaryEmailRequest = {
           period,
-          recipients,
+          recipients: targetRecipients,
         };
 
         const response = await sendPortfolioSummaryEmail(request);
@@ -111,7 +117,7 @@ export function SendEmailButton({
   const dialogDescription =
     variant === "covenant-breach"
       ? "This will send an email alert to the Risk Committee about the covenant breach."
-      : `This will send a ${period} portfolio summary email to senior management.`;
+      : "Enter your email to receive the portfolio summary report.";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -164,23 +170,23 @@ export function SendEmailButton({
           )}
 
           {variant === "portfolio-summary" && (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Period:</span>
-                <span className="font-medium capitalize">{period}</span>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="text-sm font-medium">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Portfolio summary includes: 25 loans, $1.7B exposure, ECL metrics, risk distribution
+                </p>
               </div>
-              {recipients && recipients.length > 0 && (
-                <div>
-                  <span className="text-muted-foreground">Recipients:</span>
-                  <div className="mt-1 text-xs space-y-1">
-                    {recipients.map((email) => (
-                      <div key={email} className="font-mono">
-                        {email}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 

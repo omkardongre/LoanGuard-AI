@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 
 // API base URL
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // Types
 interface AgentVote {
@@ -131,6 +131,8 @@ async function downloadPDFReport(params: {
   sector: string;
   amount: number;
   credit_score: number;
+  annual_revenue: number;
+  location: string;
 }): Promise<void> {
   const response = await fetch(`${API_BASE}/api/risk-committee/report/pdf`, {
     method: "POST",
@@ -159,10 +161,10 @@ interface RiskCommitteeCardProps {
 }
 
 export function RiskCommitteeCard({
-  loanId = "DEMO-001",
-  borrowerName = "Sample Corporation",
-  sector = "energy",
-  amount = 5000000,
+  loanId = "LOAN-025",
+  borrowerName = "Colgate-Palmolive",
+  sector = "retail",
+  amount = 50000000,
 }: RiskCommitteeCardProps) {
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -181,6 +183,8 @@ export function RiskCommitteeCard({
   const [formSector, setFormSector] = useState(sector);
   const [formAmount, setFormAmount] = useState(amount);
   const [formCreditScore, setFormCreditScore] = useState(700);
+  const [formAnnualRevenue, setFormAnnualRevenue] = useState(10000000);
+  const [formLocation, setFormLocation] = useState("London, UK");
 
   const sectors = [
     { id: "energy", name: "Energy (Oil & Gas)" },
@@ -198,6 +202,7 @@ export function RiskCommitteeCard({
     try {
       setLoading(true);
       setError(null);
+      setResult(null); // Clear previous result when starting new assessment
       
       const baseParams = {
         loan_id: formLoanId,
@@ -205,6 +210,8 @@ export function RiskCommitteeCard({
         sector: formSector,
         amount: formAmount,
         credit_score: formCreditScore,
+        annual_revenue: formAnnualRevenue,
+        location: formLocation,
       };
       
       let data: RiskCommitteeResult;
@@ -237,6 +244,8 @@ export function RiskCommitteeCard({
         sector: formSector,
         amount: formAmount,
         credit_score: formCreditScore,
+        annual_revenue: formAnnualRevenue,
+        location: formLocation,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "PDF download failed");
@@ -333,6 +342,25 @@ export function RiskCommitteeCard({
               className="h-8 text-sm"
             />
           </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Annual Revenue ($)</Label>
+            <Input 
+              type="number"
+              value={formAnnualRevenue} 
+              onChange={(e) => setFormAnnualRevenue(Number(e.target.value))}
+              placeholder="10000000"
+              className="h-8 text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Location</Label>
+            <Input 
+              value={formLocation} 
+              onChange={(e) => setFormLocation(e.target.value)}
+              placeholder="London, UK"
+              className="h-8 text-sm"
+            />
+          </div>
           <div className="col-span-2 space-y-2">
             <Label className="text-xs font-medium">Credit Score: {formCreditScore}</Label>
             <input 
@@ -417,69 +445,93 @@ export function RiskCommitteeCard({
 
         {/* Results */}
         {result && (
-          <div className="space-y-4">
-            {/* Final Decision */}
-            <div className={`p-4 rounded-lg ${getDecisionStyle(result.final_decision).bg}`}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
+          <div className="space-y-4 animate-in fade-in-50 duration-500">
+            {/* Decision Banner - Large and Prominent */}
+            <div className={`p-5 rounded-xl shadow-lg border-2 ${
+              result.final_decision === 'approve' 
+                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 border-emerald-400' 
+                : result.final_decision === 'decline'
+                ? 'bg-gradient-to-r from-red-500 to-red-600 border-red-400'
+                : result.final_decision === 'caution'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 border-amber-400'
+                : 'bg-gradient-to-r from-blue-500 to-indigo-600 border-blue-400'
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
                   {(() => {
                     const Icon = getDecisionStyle(result.final_decision).icon;
-                    return <Icon className={`h-6 w-6 ${getDecisionStyle(result.final_decision).color}`} />;
+                    return <Icon className="h-8 w-8 text-white" />;
                   })()}
-                  <span className={`text-2xl font-bold ${getDecisionStyle(result.final_decision).color}`}>
+                  <span className="text-3xl font-bold text-white tracking-tight">
                     {getDecisionStyle(result.final_decision).label}
                   </span>
                 </div>
-                <Badge className={result.consensus_achieved ? "bg-emerald-600" : "bg-amber-600"}>
-                  {result.consensus_achieved ? "Consensus" : "Split Vote"}
-                </Badge>
-              </div>
-              <p className="text-sm text-slate-700">{result.final_reasoning}</p>
-            </div>
-
-            {/* Confidence & Vote Summary */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-xs text-slate-500">Confidence</p>
                 <div className="flex items-center gap-2">
-                  <Progress value={result.final_confidence * 100} className="h-2 flex-1" />
-                  <span className="text-sm font-bold">{(result.final_confidence * 100).toFixed(0)}%</span>
+                  <Badge className="bg-white/20 text-white border-white/30 text-sm px-3">
+                    {result.consensus_achieved ? "✓ Consensus" : "⚡ Split Vote"}
+                  </Badge>
+                  <div className="bg-white/20 rounded-full px-4 py-1">
+                    <span className="text-white font-bold text-lg">{(result.final_confidence * 100).toFixed(0)}%</span>
+                    <span className="text-white/70 text-xs ml-1">confidence</span>
+                  </div>
                 </div>
               </div>
-              <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-xs text-slate-500 mb-1">Vote Summary</p>
-                <div className="flex gap-1 flex-wrap">
-                  {Object.entries(result.vote_summary).map(([vote, count]) => (
-                    count > 0 && (
-                      <Badge key={vote} className={getVoteBadgeColor(vote)}>
-                        {vote}: {count}
-                      </Badge>
-                    )
-                  ))}
-                </div>
-              </div>
+              <p className="text-white/90 text-sm leading-relaxed">{result.final_reasoning}</p>
             </div>
 
-            {/* Agent Votes */}
-            <div>
-              <p className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                <Scale className="h-4 w-4" />
-                Agent Deliberations ({result.total_agents} agents)
-              </p>
-              <div className="space-y-2">
+            {/* Vote Summary Cards - Grid Layout */}
+            <div className="grid grid-cols-4 gap-3">
+              {Object.entries(result.vote_summary).map(([vote, count]) => (
+                (count as number) > 0 && (
+                  <div key={vote} className={`text-center p-3 rounded-lg border-2 transition-all hover:scale-105 ${
+                    vote === 'approve' ? 'bg-emerald-50 border-emerald-200' :
+                    vote === 'decline' ? 'bg-red-50 border-red-200' :
+                    vote === 'caution' ? 'bg-amber-50 border-amber-200' :
+                    'bg-blue-50 border-blue-200'
+                  }`}>
+                    <div className={`text-2xl font-bold ${
+                      vote === 'approve' ? 'text-emerald-600' :
+                      vote === 'decline' ? 'text-red-600' :
+                      vote === 'caution' ? 'text-amber-600' :
+                      'text-blue-600'
+                    }`}>{count as number}</div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-600">{vote}</div>
+                  </div>
+                )
+              ))}
+            </div>
+
+            {/* Agent Deliberations - Modern Cards */}
+            <div className="bg-slate-50 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Scale className="h-4 w-4" />
+                  Agent Deliberations
+                </h4>
+                <Badge variant="outline" className="text-xs">{result.total_agents} agents</Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {result.agent_votes.map((agent, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">{agent.agent}</span>
-                      <Badge className={getVoteBadgeColor(agent.vote)}>
+                  <div key={idx} className="bg-white p-4 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          agent.vote === 'approve' ? 'bg-emerald-500' :
+                          agent.vote === 'decline' ? 'bg-red-500' :
+                          agent.vote === 'caution' ? 'bg-amber-500' :
+                          'bg-blue-500'
+                        }`}></div>
+                        <span className="text-sm font-semibold text-slate-800">{agent.agent}</span>
+                      </div>
+                      <Badge className={`${getVoteBadgeColor(agent.vote)} text-xs`}>
                         {agent.vote.toUpperCase()}
                       </Badge>
                     </div>
-                    <p className="text-xs text-slate-600">{agent.reasoning}</p>
+                    <p className="text-xs text-slate-600 leading-relaxed mb-2 line-clamp-3">{agent.reasoning}</p>
                     {agent.risk_factors.length > 0 && (
-                      <div className="mt-1 flex gap-1 flex-wrap">
+                      <div className="flex gap-1 flex-wrap">
                         {agent.risk_factors.slice(0, 2).map((rf, i) => (
-                          <Badge key={i} variant="outline" className="text-[10px] bg-red-50">
+                          <Badge key={i} variant="outline" className="text-[9px] bg-slate-50 text-slate-600">
                             {rf}
                           </Badge>
                         ))}

@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 
 // API base URL
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // Types
 interface MaterialChange {

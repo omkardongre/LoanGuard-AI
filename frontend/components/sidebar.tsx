@@ -75,16 +75,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      <div className="absolute bottom-4 left-4 right-4">
-        <Link
-          href="/settings"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-800"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </Link>
-      </div>
     </aside>
   );
 }

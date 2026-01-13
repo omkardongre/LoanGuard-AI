@@ -26,9 +26,10 @@ export function StatusBadge({ status, size = "md" }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center font-medium rounded-full border",
+        "status-badge inline-flex items-center font-medium rounded-full border transition-all duration-200 hover:scale-105",
         colorClass,
-        sizes[size]
+        sizes[size],
+        status === "RED" || status === "BEHIND" ? "pulse-alert" : ""
       )}
     >
       <span

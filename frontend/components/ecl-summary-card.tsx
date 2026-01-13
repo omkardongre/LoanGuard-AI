@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 // API base URL
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // Types
 interface StageBreakdown {
@@ -56,18 +56,51 @@ interface ECLResponse {
   run_timestamp?: string;
 }
 
-// Fetch function
-async function fetchECLSummary(): Promise<ECLResponse> {
+// Fetch function - parse production API response
+async function fetchECLSummary(): Promise<any> {
   const response = await fetch(`${API_BASE}/api/ecl/portfolio/summary`);
   if (!response.ok) throw new Error("Failed to fetch ECL summary");
-  return response.json();
+  const data = await response.json();
+  
+  // Transform production API response to expected structure
+  const portfolioSummary = data.portfolio_summary || {};
+  const stageBreakdown = data.stage_breakdown || {};
+  
+  return {
+    success: true,
+    summary: {
+      total_ecl: portfolioSummary.total_ecl || 0,
+      total_ead: portfolioSummary.total_ead || 0,
+      weighted_avg_pd: portfolioSummary.weighted_avg_pd || 0,
+      weighted_avg_lgd: portfolioSummary.weighted_avg_lgd || 0,
+      loan_count: portfolioSummary.loan_count || 0,
+      coverage_ratio: (portfolioSummary.ecl_coverage_ratio_pct || 0) / 100,
+      stage_breakdown: {
+        stage_1: {
+          count: stageBreakdown['1']?.loan_count || 0,
+          ecl: stageBreakdown['1']?.total_ecl || 0,
+          percentage: stageBreakdown['1']?.pct_of_portfolio_ead || 0,
+        },
+        stage_2: {
+          count: stageBreakdown['2']?.loan_count || 0,
+          ecl: stageBreakdown['2']?.total_ecl || 0,
+          percentage: stageBreakdown['2']?.pct_of_portfolio_ead || 0,
+        },
+        stage_3: {
+          count: stageBreakdown['3']?.loan_count || 0,
+          ecl: stageBreakdown['3']?.total_ecl || 0,
+          percentage: stageBreakdown['3']?.pct_of_portfolio_ead || 0,
+        },
+      },
+    },
+  };
 }
 
 // Component
 export function ECLSummaryCard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [result, setResult] = useState<ECLResponse | null>(null);
+  const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Load data on mount
@@ -286,7 +319,7 @@ export function ECLSummaryCard() {
               <div className="p-4 bg-slate-50 rounded-lg">
                 <p className="text-sm font-medium text-slate-700 mb-3">ECL by Sector</p>
                 <div className="space-y-2">
-                  {result.sector_breakdown.slice(0, 5).map((sector) => (
+                  {result.sector_breakdown.slice(0, 5).map((sector: { sector: string; ecl: number; loan_count: number; avg_pd: number }) => (
                     <div key={sector.sector} className="flex items-center justify-between text-sm">
                       <span className="text-slate-600">{sector.sector}</span>
                       <div className="flex items-center gap-2">

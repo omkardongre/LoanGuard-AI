@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 // API base URL
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // Types
 interface VaRResult {
@@ -57,18 +57,26 @@ interface MonteCarloResult {
   run_timestamp: string;
 }
 
-// Fetch function
+// Fetch function - Using production API
 async function runMonteCarlo(params: {
   n_simulations: number;
   correlation: number;
   stressed: boolean;
   pd_multiplier: number;
   lgd_multiplier: number;
-}): Promise<MonteCarloResult> {
-  const response = await fetch(`${API_BASE}/api/monte-carlo/run`, {
+}): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/monte-carlo/production/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+    body: JSON.stringify({
+      n_simulations: params.n_simulations,
+      correlation: params.correlation,
+      // Include stress parameters if stressed mode
+      ...(params.stressed && {
+        pd_multiplier: params.pd_multiplier,
+        lgd_multiplier: params.lgd_multiplier,
+      }),
+    }),
   });
   if (!response.ok) throw new Error("Monte Carlo simulation failed");
   return response.json();
@@ -77,15 +85,15 @@ async function runMonteCarlo(params: {
 // Component
 export function MonteCarloCard() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<MonteCarloResult | null>(null);
+  const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Parameters
   const [nSimulations, setNSimulations] = useState(10000);
   const [correlation, setCorrelation] = useState(0.2);
   const [stressed, setStressed] = useState(false);
-  const [pdMultiplier, setPdMultiplier] = useState(1.0);
-  const [lgdMultiplier, setLgdMultiplier] = useState(1.0);
+  const [pdMultiplier, setPdMultiplier] = useState(1.5);
+  const [lgdMultiplier, setLgdMultiplier] = useState(1.2);
 
   // Run simulation
   async function handleRunSimulation() {
@@ -139,11 +147,11 @@ export function MonteCarloCard() {
             Monte Carlo VaR
           </CardTitle>
           <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300">
-            10K Simulations
+            {(nSimulations / 1000).toFixed(0)}K Simulations
           </Badge>
         </div>
         <CardDescription>
-          Value-at-Risk calculation with Gaussian copula correlation
+          Portfolio risk analysis with correlated default modeling
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
@@ -236,17 +244,17 @@ export function MonteCarloCard() {
           </div>
         )}
 
-        {/* Results */}
-        {result && result.var_result && (
+        {/* Results - Updated to match production API response */}
+        {result && result.var && (
           <div className="space-y-4">
             {/* VaR Summary */}
-            <div className={`p-4 rounded-lg ${getVaRSeverity(result.var_result.var_99, result.var_result.portfolio_ead).bg}`}>
+            <div className={`p-4 rounded-lg ${getVaRSeverity(result.var.var_99?.var_amount || 0, result.portfolio?.total_ead || 1).bg}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium">
                   {stressed ? "Stressed" : "Base"} Scenario
                 </span>
-                <Badge className={getVaRSeverity(result.var_result.var_99, result.var_result.portfolio_ead).color}>
-                  {getVaRSeverity(result.var_result.var_99, result.var_result.portfolio_ead).label}
+                <Badge className={getVaRSeverity(result.var.var_99?.var_amount || 0, result.portfolio?.total_ead || 1).color}>
+                  {getVaRSeverity(result.var.var_99?.var_amount || 0, result.portfolio?.total_ead || 1).label}
                 </Badge>
               </div>
 
@@ -254,62 +262,75 @@ export function MonteCarloCard() {
                 <div>
                   <p className="text-xs text-slate-500">VaR 95%</p>
                   <p className="text-lg font-bold text-blue-700">
-                    {formatCurrency(result.var_result.var_95)}
+                    {formatCurrency(result.var.var_95?.var_amount || 0)}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {result.var.var_95?.var_pct_of_portfolio?.toFixed(1) || 0}% of portfolio
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">VaR 99%</p>
                   <p className="text-lg font-bold text-purple-700">
-                    {formatCurrency(result.var_result.var_99)}
+                    {formatCurrency(result.var.var_99?.var_amount || 0)}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {result.var.var_99?.var_pct_of_portfolio?.toFixed(1) || 0}% of portfolio
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">CVaR 99%</p>
                   <p className="text-lg font-bold text-red-700">
-                    {formatCurrency(result.var_result.cvar_99)}
+                    {formatCurrency(result.cvar?.cvar_99_amount || 0)}
                   </p>
                   <p className="text-xs text-slate-400">Expected Shortfall</p>
                 </div>
               </div>
             </div>
 
-            {/* Loss Distribution */}
-            {result.loss_distribution_summary && (
+            {/* Loss Distribution Percentiles */}
+            {result.percentiles && (
               <div className="p-4 bg-slate-50 rounded-lg">
-                <p className="text-sm font-medium text-slate-700 mb-3">Loss Distribution</p>
+                <p className="text-sm font-medium text-slate-700 mb-3">Loss Distribution Percentiles</p>
                 <div className="grid grid-cols-5 gap-2 text-center text-xs">
                   <div className="p-2 bg-emerald-50 rounded">
-                    <p className="text-slate-500">5th %ile</p>
-                    <p className="font-medium">{formatCurrency(result.loss_distribution_summary.percentile_5)}</p>
+                    <p className="text-slate-500">50th %ile</p>
+                    <p className="font-medium">{formatCurrency(result.percentiles.p50 || 0)}</p>
                   </div>
                   <div className="p-2 bg-green-50 rounded">
-                    <p className="text-slate-500">25th %ile</p>
-                    <p className="font-medium">{formatCurrency(result.loss_distribution_summary.percentile_25)}</p>
+                    <p className="text-slate-500">75th %ile</p>
+                    <p className="font-medium">{formatCurrency(result.percentiles.p75 || 0)}</p>
                   </div>
                   <div className="p-2 bg-blue-50 rounded">
-                    <p className="text-slate-500">Median</p>
-                    <p className="font-medium">{formatCurrency(result.loss_distribution_summary.median)}</p>
+                    <p className="text-slate-500">90th %ile</p>
+                    <p className="font-medium">{formatCurrency(result.percentiles.p90 || 0)}</p>
                   </div>
                   <div className="p-2 bg-amber-50 rounded">
-                    <p className="text-slate-500">75th %ile</p>
-                    <p className="font-medium">{formatCurrency(result.loss_distribution_summary.percentile_75)}</p>
+                    <p className="text-slate-500">95th %ile</p>
+                    <p className="font-medium">{formatCurrency(result.percentiles.p95 || 0)}</p>
                   </div>
                   <div className="p-2 bg-red-50 rounded">
-                    <p className="text-slate-500">95th %ile</p>
-                    <p className="font-medium">{formatCurrency(result.loss_distribution_summary.percentile_95)}</p>
+                    <p className="text-slate-500">99th %ile</p>
+                    <p className="font-medium">{formatCurrency(result.percentiles.p99 || 0)}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mt-4 text-xs">
-                  <div className="flex items-center justify-between p-2 bg-white rounded">
-                    <span className="text-slate-500">Skewness</span>
-                    <span className="font-medium">{result.loss_distribution_summary.skewness.toFixed(3)}</span>
+                {/* Loss Distribution Stats */}
+                {result.loss_distribution && (
+                  <div className="grid grid-cols-3 gap-4 mt-4 text-xs">
+                    <div className="flex items-center justify-between p-2 bg-white rounded">
+                      <span className="text-slate-500">Mean Loss</span>
+                      <span className="font-medium">{formatCurrency(result.loss_distribution.mean || 0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded">
+                      <span className="text-slate-500">Volatility</span>
+                      <span className="font-medium">{formatCurrency(result.loss_distribution.std || 0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded">
+                      <span className="text-slate-500">Max Loss</span>
+                      <span className="font-medium">{formatCurrency(result.loss_distribution.max || 0)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between p-2 bg-white rounded">
-                    <span className="text-slate-500">Kurtosis</span>
-                    <span className="font-medium">{result.loss_distribution_summary.kurtosis.toFixed(3)}</span>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -317,19 +338,22 @@ export function MonteCarloCard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-slate-50 rounded-lg">
                 <p className="text-xs text-slate-500">Portfolio EAD</p>
-                <p className="text-sm font-medium">{formatCurrency(result.var_result.portfolio_ead)}</p>
+                <p className="text-sm font-medium">{formatCurrency(result.portfolio?.total_ead || 0)}</p>
               </div>
               <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-xs text-slate-500">Mean Loss</p>
-                <p className="text-sm font-medium">{formatCurrency(result.var_result.mean_loss)}</p>
+                <p className="text-xs text-slate-500">Loans Analyzed</p>
+                <p className="text-sm font-medium">{result.portfolio?.loan_count || 0} loans</p>
               </div>
             </div>
 
             {/* Simulation Info */}
             <div className="flex items-center gap-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
-              <Badge className="bg-purple-600 text-white">Gaussian Copula</Badge>
+              <Badge className="bg-purple-600 text-white">Correlated Defaults</Badge>
               <span className="text-xs text-purple-700">
-                {result.var_result.n_simulations.toLocaleString()} simulations
+                {result.simulation_info?.n_simulations?.toLocaleString() || 0} scenarios
+              </span>
+              <span className="text-xs text-slate-500 ml-auto">
+                Run ID: {result.simulation_info?.id || 'N/A'}
               </span>
             </div>
           </div>
@@ -340,7 +364,7 @@ export function MonteCarloCard() {
           <div className="text-center py-8 text-slate-500">
             <Activity className="h-12 w-12 mx-auto mb-3 opacity-30" />
             <p className="text-sm">Configure parameters and run simulation</p>
-            <p className="text-xs mt-1">Uses Gaussian copula for correlated defaults</p>
+            <p className="text-xs mt-1">Models how defaults spread across your portfolio</p>
           </div>
         )}
       </CardContent>

@@ -1,5 +1,6 @@
-# LoanGuard AI Platform - Multi-service Dockerfile
-FROM python:3.11-slim
+# LoanGuard AI API Gateway - Google Cloud Run Dockerfile
+# Best practices: https://cloud.google.com/run/docs/quickstarts/build-and-deploy/python
+FROM python:3.11-slim-bullseye
 
 WORKDIR /app
 
@@ -8,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Copy requirements first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -18,12 +19,14 @@ COPY . .
 # Create logs directory
 RUN mkdir -p logs
 
-# Default environment variables
+# Environment variables for Cloud Run
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=8080
 
-# Expose ports for all services
-EXPOSE 8081 8082 8083 8084
+# Expose Cloud Run default port
+EXPOSE 8080
 
-# Default command (can be overridden)
-CMD ["python", "-m", "document_service", "--port", "8081"]
+# Use gunicorn with uvicorn workers for production
+# Cloud Run sets PORT env variable automatically
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 -k uvicorn.workers.UvicornWorker api_gateway.main:app

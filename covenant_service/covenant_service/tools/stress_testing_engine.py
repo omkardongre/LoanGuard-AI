@@ -245,6 +245,113 @@ CLIMATE_SCENARIOS = {
 }
 
 
+# NGFS Short-Term Scenarios (May 2025)
+# Source: NGFS.net - First short-term climate scenarios released May 7, 2025
+# 5-year horizon (2025-2030), designed for near-term financial stability assessment
+NGFS_SHORT_TERM_SCENARIOS = {
+    "ngfs_st_disasters": StressScenario(
+        id="st_disasters_stagnation",
+        name="Disasters & Policy Stagnation",
+        description="Extreme weather events with no climate policy response. Physical risks dominate: droughts, floods, wildfires. Up to 12.5% GDP loss in Africa, 6% in Asia.",
+        scenario_type=ScenarioType.CLIMATE_PHYSICAL,
+        gdp_shock=-0.06,  # Regional up to -12.5%, global avg ~-6%
+        unemployment_shock=0.04,
+        property_price_shock=-0.15,  # Physical damage to assets
+        pd_multiplier=1.8,
+        lgd_multiplier=1.4,
+        carbon_price_2030=0,  # No policy = no carbon price
+        temperature_increase_2050=3.0,  # Continued warming
+        transition_risk_factor=1.0,  # No transition
+        physical_risk_factor=2.0,  # High physical risk from disasters
+        sector_adjustments={
+            "agriculture": 2.5,  # Extreme weather impact
+            "real_estate": 2.0,  # Flood/fire damage
+            "insurance": 1.8,
+            "tourism": 2.0,
+            "utilities": 1.5,  # Grid disruptions
+            "transportation": 1.6,  # Supply chain disruptions
+        },
+        horizon_years=5  # 2025-2030
+    ),
+    
+    "ngfs_st_highway_paris": StressScenario(
+        id="st_highway_paris",
+        name="Highway to Paris (Orderly)",
+        description="Early, gradual introduction of ambitious climate policies. Minimal economic disruption: only 0.4% GDP loss by 2030. Orderly energy transition.",
+        scenario_type=ScenarioType.CLIMATE_TRANSITION,
+        gdp_shock=-0.004,  # Only -0.4% - orderly transition
+        unemployment_shock=0.005,  # Minimal
+        pd_multiplier=1.1,
+        lgd_multiplier=1.05,
+        carbon_price_2030=150,  # Gradual carbon pricing
+        temperature_increase_2050=1.5,  # Paris-aligned
+        transition_risk_factor=1.1,  # Manageable transition
+        physical_risk_factor=1.05,  # Limited physical risk
+        sector_adjustments={
+            "oil_gas": 1.5,  # Managed decline
+            "utilities": 1.2,
+            "renewable_energy": 0.8,  # Benefits from policy
+            "technology": 0.9,
+            "manufacturing": 1.1,
+        },
+        horizon_years=5
+    ),
+    
+    "ngfs_st_sudden_wakeup": StressScenario(
+        id="st_sudden_wakeup",
+        name="Sudden Wake-Up Call",
+        description="3-year policy delay then abrupt pivot in 2027. Sharp carbon price spike, 1.3% GDP loss by 2030, +1.3pp unemployment. High transition stress.",
+        scenario_type=ScenarioType.CLIMATE_TRANSITION,
+        gdp_shock=-0.013,  # -1.3% by 2030
+        unemployment_shock=0.013,  # +1.3pp
+        inflation_shock=0.03,  # Carbon price spike causes inflation
+        pd_multiplier=1.6,
+        lgd_multiplier=1.25,
+        carbon_price_2030=300,  # Sharp spike from policy pivot
+        temperature_increase_2050=1.8,
+        transition_risk_factor=1.5,  # High transition stress
+        physical_risk_factor=1.1,
+        sector_adjustments={
+            "oil_gas": 2.8,  # Abrupt policy hits hardest
+            "utilities": 2.0,
+            "mining": 2.2,
+            "transportation": 1.8,
+            "manufacturing": 1.5,
+            "agriculture": 1.3,
+            "renewable_energy": 0.75,  # Strong benefit
+        },
+        horizon_years=5
+    ),
+    
+    "ngfs_st_diverging": StressScenario(
+        id="st_diverging_realities",
+        name="Diverging Realities",
+        description="Mixed global response: advanced economies push net-zero while others lag. Regional weather events + supply chain disruptions. Europe -1.7% GDP, N.America -0.8%.",
+        scenario_type=ScenarioType.COMBINED,
+        gdp_shock=-0.012,  # Regional variation: EU -1.7%, NA -0.8%
+        unemployment_shock=0.02,
+        interest_rate_shock=0.01,
+        property_price_shock=-0.10,  # Regional physical impacts
+        pd_multiplier=1.7,
+        lgd_multiplier=1.3,
+        carbon_price_2030=200,  # Only in advanced economies
+        temperature_increase_2050=2.2,
+        transition_risk_factor=1.35,  # Uneven transition
+        physical_risk_factor=1.5,  # Regional disasters
+        sector_adjustments={
+            "oil_gas": 2.2,
+            "agriculture": 2.0,  # Supply chain + weather
+            "real_estate": 1.6,
+            "utilities": 1.5,
+            "mining": 2.0,  # Critical raw materials disruption
+            "transportation": 1.7,
+            "manufacturing": 1.4,
+        },
+        horizon_years=5
+    ),
+}
+
+
 # Combined scenarios
 COMBINED_SCENARIOS = {
     "climate_recession": StressScenario(
@@ -279,6 +386,7 @@ COMBINED_SCENARIOS = {
 ALL_SCENARIOS: Dict[str, StressScenario] = {
     **ECONOMIC_SCENARIOS,
     **CLIMATE_SCENARIOS,
+    **NGFS_SHORT_TERM_SCENARIOS,  # NGFS Short-Term Scenarios (May 2025)
     **COMBINED_SCENARIOS,
 }
 

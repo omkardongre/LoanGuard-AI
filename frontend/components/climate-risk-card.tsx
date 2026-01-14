@@ -71,8 +71,8 @@ interface ClimateStressResult {
   }>;
 }
 
-// NGFS scenario definitions (static data)
-const NGFS_SCENARIOS: ClimateScenario[] = [
+// NGFS Long-Term scenario definitions (v5 November 2024)
+const NGFS_LONG_TERM_SCENARIOS: ClimateScenario[] = [
   {
     id: "climate_disorderly",
     name: "Disorderly Transition",
@@ -111,6 +111,60 @@ const NGFS_SCENARIOS: ClimateScenario[] = [
   },
 ];
 
+// NGFS Short-Term scenario definitions (May 2025)
+// Source: NGFS.net - First short-term climate scenarios released May 7, 2025
+// 5-year horizon (2025-2030), designed for near-term financial stability assessment
+const NGFS_SHORT_TERM_SCENARIOS: ClimateScenario[] = [
+  {
+    id: "st_disasters_stagnation",
+    name: "Disasters & Policy Stagnation",
+    type: "climate_physical",
+    description: "Extreme weather events with no climate policy. Up to 12.5% GDP loss regionally. Physical risks dominate.",
+    pd_multiplier: 1.8,
+    lgd_multiplier: 1.4,
+    carbon_price_2030: 0,
+    temperature_increase_2050: 3.0,
+    transition_risk_factor: 1.0,
+    physical_risk_factor: 2.0,
+  },
+  {
+    id: "st_highway_paris",
+    name: "Highway to Paris",
+    type: "climate_transition",
+    description: "Early, gradual policies. Only 0.4% GDP loss by 2030. Orderly energy transition.",
+    pd_multiplier: 1.1,
+    lgd_multiplier: 1.05,
+    carbon_price_2030: 150,
+    temperature_increase_2050: 1.5,
+    transition_risk_factor: 1.1,
+    physical_risk_factor: 1.05,
+  },
+  {
+    id: "st_sudden_wakeup",
+    name: "Sudden Wake-Up Call",
+    type: "climate_transition",
+    description: "3-year policy delay then abrupt pivot in 2027. Sharp carbon spike, 1.3% GDP loss, high transition stress.",
+    pd_multiplier: 1.6,
+    lgd_multiplier: 1.25,
+    carbon_price_2030: 300,
+    temperature_increase_2050: 1.8,
+    transition_risk_factor: 1.5,
+    physical_risk_factor: 1.1,
+  },
+  {
+    id: "st_diverging_realities",
+    name: "Diverging Realities",
+    type: "combined",
+    description: "Mixed global response: EU -1.7% GDP, NA -0.8%. Regional weather + supply chain disruptions.",
+    pd_multiplier: 1.7,
+    lgd_multiplier: 1.3,
+    carbon_price_2030: 200,
+    temperature_increase_2050: 2.2,
+    transition_risk_factor: 1.35,
+    physical_risk_factor: 1.5,
+  },
+];
+
 // High carbon intensity sectors
 const HIGH_CARBON_SECTORS = [
   "oil_gas",
@@ -134,11 +188,20 @@ async function runClimateStressTest(scenarioId: string): Promise<ClimateStressRe
 
 // Component
 export function ClimateRiskCard() {
-  const [selectedScenario, setSelectedScenario] = useState<ClimateScenario>(NGFS_SCENARIOS[0]);
+  const [useShortTerm, setUseShortTerm] = useState(false);
+  const activeScenarios = useShortTerm ? NGFS_SHORT_TERM_SCENARIOS : NGFS_LONG_TERM_SCENARIOS;
+  const [selectedScenario, setSelectedScenario] = useState<ClimateScenario>(NGFS_LONG_TERM_SCENARIOS[0]);
   const [result, setResult] = useState<ClimateStressResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+
+  // Reset selected scenario when switching scenario types
+  const handleToggleScenarioType = () => {
+    setUseShortTerm(!useShortTerm);
+    setSelectedScenario(useShortTerm ? NGFS_LONG_TERM_SCENARIOS[0] : NGFS_SHORT_TERM_SCENARIOS[0]);
+    setResult(null);
+  };
 
   // Run climate stress test
   async function handleRunTest() {
@@ -195,12 +258,24 @@ export function ClimateRiskCard() {
             <Leaf className="h-5 w-5 text-green-600" />
             Climate Risk Analysis
           </CardTitle>
-          <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
-            NGFS v5
-          </Badge>
+          <Button 
+            onClick={handleToggleScenarioType}
+            variant="outline"
+            size="sm"
+            className={`flex items-center gap-2 font-semibold transition-all shadow-md hover:shadow-lg ${
+              useShortTerm 
+                ? 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 border-amber-400 hover:from-amber-200 hover:to-orange-200' 
+                : 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-green-400 hover:from-green-200 hover:to-emerald-200'
+            }`}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {useShortTerm ? 'NGFS ST 2025' : 'NGFS v5 Long-Term'}
+          </Button>
         </div>
         <CardDescription>
-          EU 2025 mandated climate stress testing with NGFS scenarios
+          {useShortTerm 
+            ? 'Short-term scenarios (May 2025) - 5-year horizon 2025-2030' 
+            : 'Long-term scenarios (v5 Nov 2024) - EU 2025 mandated'}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
@@ -208,12 +283,12 @@ export function ClimateRiskCard() {
         <Tabs
           value={selectedScenario.id}
           onValueChange={(id) => {
-            const scenario = NGFS_SCENARIOS.find((s) => s.id === id);
+            const scenario = activeScenarios.find((s: ClimateScenario) => s.id === id);
             if (scenario) setSelectedScenario(scenario);
           }}
         >
-          <TabsList className="grid w-full grid-cols-3">
-            {NGFS_SCENARIOS.map((scenario) => (
+          <TabsList className={`grid w-full ${activeScenarios.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+            {activeScenarios.map((scenario: ClimateScenario) => (
               <TabsTrigger key={scenario.id} value={scenario.id} className="text-xs">
                 {getScenarioIcon(scenario.type)}
                 <span className="ml-1 hidden sm:inline">{scenario.name.split(" ")[0]}</span>
@@ -221,7 +296,7 @@ export function ClimateRiskCard() {
             ))}
           </TabsList>
 
-          {NGFS_SCENARIOS.map((scenario) => (
+          {activeScenarios.map((scenario: ClimateScenario) => (
             <TabsContent key={scenario.id} value={scenario.id} className="mt-4">
               <div className="p-4 bg-slate-50 rounded-lg space-y-3">
                 <div className="flex items-start gap-2">
@@ -390,10 +465,14 @@ export function ClimateRiskCard() {
             {/* NGFS Badge */}
             <div className="text-center p-2 bg-blue-50 rounded-lg">
               <p className="text-xs text-blue-600">
-                Powered by NGFS Climate Scenarios v5 (November 2024)
+                {useShortTerm 
+                  ? 'Powered by NGFS Short-Term Scenarios (May 2025)' 
+                  : 'Powered by NGFS Climate Scenarios v5 (November 2024)'}
               </p>
               <p className="text-xs text-slate-500">
-                Same methodology used by ECB, Fed, BoE
+                {useShortTerm 
+                  ? '5-year horizon (2025-2030) for near-term financial stability'
+                  : 'Same methodology used by ECB, Fed, BoE'}
               </p>
             </div>
           </div>

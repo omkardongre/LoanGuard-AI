@@ -71,6 +71,7 @@ export function SendEmailButton({
           threshold,
           actual_value: actualValue,
           severity,
+          recipient_email: emailInput.trim() || undefined,
         };
 
         const response = await sendCovenantBreachAlert(request);
@@ -135,36 +136,56 @@ export function SendEmailButton({
 
         <div className="space-y-4 py-4">
           {variant === "covenant-breach" && (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Loan ID:</span>
-                <span className="font-medium">{loanId}</span>
+            <div className="space-y-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Loan ID:</span>
+                  <span className="font-medium">{loanId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Breach Type:</span>
+                  <span className="font-medium">{breachType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Threshold:</span>
+                  <span className="font-medium">{threshold}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Actual Value:</span>
+                  <span className="font-medium text-destructive">{actualValue}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Severity:</span>
+                  <span
+                    className={`font-medium ${
+                      severity === "HIGH"
+                        ? "text-destructive"
+                        : severity === "MEDIUM"
+                        ? "text-orange-600"
+                        : "text-yellow-600"
+                    }`}
+                  >
+                    {severity}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Breach Type:</span>
-                <span className="font-medium">{breachType}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Threshold:</span>
-                <span className="font-medium">{threshold}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Actual Value:</span>
-                <span className="font-medium text-destructive">{actualValue}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Severity:</span>
-                <span
-                  className={`font-medium ${
-                    severity === "HIGH"
-                      ? "text-destructive"
-                      : severity === "MEDIUM"
-                      ? "text-orange-600"
-                      : "text-yellow-600"
-                  }`}
-                >
-                  {severity}
-                </span>
+              
+              {/* Email Recipient Input */}
+              <div className="pt-3 border-t">
+                <label htmlFor="breach-email" className="text-sm font-medium">
+                  Recipient Email Address
+                </label>
+                <input
+                  id="breach-email"
+                  type="email"
+                  placeholder="risk-committee@company.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter the email address of the Risk Committee member to receive this alert
+                </p>
               </div>
             </div>
           )}

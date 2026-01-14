@@ -185,7 +185,7 @@ class PrepaymentPredictorV2:
             CPR=cpr_smm['CPR'],
             SMM=cpr_smm['SMM'],
             model_version=self._version,
-            data_source="FRED MORTGAGE30US + XGBoost Model",
+            data_source="Federal Reserve Live Rates + ML Analytics",
             as_of=datetime.now().isoformat(),
         )
     

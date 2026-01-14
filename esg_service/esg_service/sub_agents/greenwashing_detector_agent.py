@@ -1,3 +1,4 @@
+
 """
 Greenwashing Detector Agent - Identifies potential greenwashing risks.
 """

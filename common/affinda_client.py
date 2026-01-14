@@ -18,7 +18,10 @@ from typing import Any, Dict, List, Optional
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    from pathlib import Path
+    # Use explicit path and override to ensure latest values
+    env_path = Path(__file__).parent.parent / ".env"
+    load_dotenv(env_path, override=True)
 except ImportError:
     pass  # dotenv not installed, rely on system env vars
 
@@ -39,6 +42,7 @@ class ExtractedCovenant:
     measurement_frequency: str = "Quarterly"
     raw_text: str = ""
     confidence: float = 0.0
+    covenant_name: str = ""  # Human-readable name (V10 enhancement)
 
 
 @dataclass
@@ -155,9 +159,9 @@ class AffindaClient:
         filename: str
     ) -> ExtractedLoanAgreement:
         """
-        Parse a loan agreement from bytes content.
+        Parse a loan agreement from bytes content using direct REST API.
         
-        Useful for API uploads where file is in memory.
+        Uses direct HTTP call instead of SDK to avoid 'data' keyword conflict.
         
         Args:
             content: File content as bytes
@@ -172,25 +176,169 @@ class AffindaClient:
                 "AFFINDA_WORKSPACE_ID environment variables."
             )
         
-        client = self._get_client()
-        
         try:
-            logger.info(f"Parsing document bytes: {filename}")
+            import httpx
+            logger.info(f"Parsing document bytes via REST API: {filename}")
             
-            doc = client.create_document(
-                file=content,
-                file_name=filename,
-                workspace=self.workspace_id,
-                collection=self.collection_id if self.collection_id else None,
-                wait=True,
-            )
+            # Use direct REST API to avoid SDK bug
+            url = "https://api.affinda.com/v3/documents"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/json",
+            }
             
-            logger.info(f"Document parsed successfully: {doc.meta.identifier}")
-            return self._process_response(doc)
+            # Prepare multipart form data
+            files = {
+                "file": (filename, content, self._get_mime_type(filename))
+            }
+            data = {
+                "workspace": self.workspace_id,
+                "wait": "true",
+            }
+            if self.collection_id:
+                data["collection"] = self.collection_id
+            
+            # Make request with timeout
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(url, headers=headers, files=files, data=data)
+            
+            if response.status_code != 200 and response.status_code != 201:
+                logger.error(f"Affinda API error: {response.status_code} - {response.text}")
+                raise Exception(f"Affinda API error: {response.status_code}")
+            
+            doc_data = response.json()
+            logger.info(f"Document parsed successfully via REST API")
+            
+            return self._process_rest_response(doc_data)
             
         except Exception as e:
             logger.error(f"Affinda parsing error: {e}")
             raise
+    
+    def _get_mime_type(self, filename: str) -> str:
+        """Get MIME type from filename extension."""
+        ext = filename.lower().split(".")[-1] if "." in filename else ""
+        mime_types = {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "doc": "application/msword",
+            "txt": "text/plain",
+        }
+        return mime_types.get(ext, "application/octet-stream")
+    
+    def _process_rest_response(self, doc_data: dict) -> ExtractedLoanAgreement:
+        """Process REST API response into ExtractedLoanAgreement.
+        
+        Affinda v3 returns nested structures like:
+        {
+            "borrowerName": {"parsed": "Company Name", "raw": "..."},
+            "loanAmount": {"parsed": 500000000.0, "raw": "$500,000,000"},
+            "financialCovenants": [{"parsed": {...}, ...}]
+        }
+        """
+        data = doc_data.get("data", {}) or {}
+        meta = doc_data.get("meta", {}) or {}
+        
+        def extract_v3_field(data, field_names, default=""):
+            """Extract from Affinda v3 nested structure."""
+            for name in field_names:
+                value = data.get(name)
+                if value is not None:
+                    if isinstance(value, dict):
+                        return str(value.get("parsed") or value.get("raw") or default)
+                    return str(value)
+            return default
+        
+        def extract_v3_number(data, field_names, default=0.0):
+            """Extract numeric from Affinda v3 nested structure."""
+            for name in field_names:
+                value = data.get(name)
+                if value is not None:
+                    if isinstance(value, dict):
+                        parsed = value.get("parsed")
+                        if parsed is not None:
+                            try:
+                                return float(parsed)
+                            except (ValueError, TypeError):
+                                pass
+                        raw = value.get("raw")
+                        if raw is not None:
+                            try:
+                                # Clean currency symbols
+                                cleaned = str(raw).replace("$", "").replace(",", "").replace("€", "").replace("£", "").strip()
+                                return float(cleaned)
+                            except (ValueError, TypeError):
+                                pass
+                    elif value is not None:
+                        try:
+                            return float(value)
+                        except (ValueError, TypeError):
+                            pass
+            return default
+        
+        # Extract main fields
+        borrower_name = extract_v3_field(data, [
+            "borrowerName", "borrower_name", "borrower"
+        ], "Unknown Borrower")
+        
+        lender_name = extract_v3_field(data, [
+            "lenderName", "lender_name", "lender"
+        ], "Unknown Lender")
+        
+        loan_amount = extract_v3_number(data, [
+            "loanAmount", "loan_amount", "principalAmount", "amount"
+        ], 0.0)
+        
+        currency = extract_v3_field(data, ["currency"], "USD")
+        
+        maturity_date = extract_v3_field(data, [
+            "maturityDate", "maturity_date"
+        ], "")
+        
+        interest_rate = extract_v3_field(data, [
+            "interestRate", "interest_rate"
+        ], "")
+        
+        # Extract financial covenants from Affinda v3 format
+        covenants = []
+        fin_covs = data.get("financialCovenants", {})
+        if fin_covs:
+            items = fin_covs if isinstance(fin_covs, list) else fin_covs.get("items", []) or []
+            for item in items:
+                if isinstance(item, dict):
+                    parsed = item.get("parsed", {}) if isinstance(item.get("parsed"), dict) else item
+                    cov = ExtractedCovenant(
+                        covenant_type=str(parsed.get("covenantType", parsed.get("type", "Unknown"))),
+                        threshold_value=str(parsed.get("thresholdValue", parsed.get("threshold", ""))),
+                        measurement_frequency=str(parsed.get("frequency", "Quarterly")),
+                        raw_text=str(item.get("raw", "")),
+                        confidence=float(item.get("confidence", 0) or 0),
+                    )
+                    covenants.append(cov)
+        
+        # Get document ID
+        doc_id = meta.get("identifier", "")
+        
+        # Calculate confidence
+        confidence = self._calculate_confidence(
+            borrower_name, lender_name, loan_amount,
+            maturity_date, interest_rate, covenants
+        )
+        
+        logger.info(f"Extracted: borrower={borrower_name}, amount={loan_amount}, covenants={len(covenants)}")
+        
+        return ExtractedLoanAgreement(
+            borrower_name=borrower_name,
+            lender_name=lender_name,
+            loan_amount=loan_amount,
+            currency=currency,
+            maturity_date=maturity_date,
+            interest_rate=interest_rate,
+            covenants=covenants,
+            raw_text=data.get("rawText", "") or "",
+            extraction_confidence=confidence,
+            document_id=doc_id,
+        )
     
     def _process_response(self, doc) -> ExtractedLoanAgreement:
         """

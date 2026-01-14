@@ -294,11 +294,28 @@ export default function SocialLoansPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Loan Portfolio</TabsTrigger>
-            <TabsTrigger value="validation">SLP Validation</TabsTrigger>
-            <TabsTrigger value="categories">SLP Categories</TabsTrigger>
-            <TabsTrigger value="impact">Social Impact</TabsTrigger>
+          <TabsList className="grid grid-cols-3 gap-2 bg-transparent p-1 h-auto">
+            <TabsTrigger 
+              value="overview" 
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white data-[state=active]:shadow-lg px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2"
+            >
+              <Heart className="h-4 w-4" />
+              Loan Portfolio
+            </TabsTrigger>
+            <TabsTrigger 
+              value="validation"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-lg px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              SLP Validation
+            </TabsTrigger>
+            <TabsTrigger 
+              value="categories"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-lg px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2"
+            >
+              <Briefcase className="h-4 w-4" />
+              SLP Categories
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -369,11 +386,14 @@ export default function SocialLoansPage() {
           <TabsContent value="validation">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Loan List */}
-              <Card className="lg:col-span-1">
-                <CardHeader>
-                  <CardTitle className="text-base">Select Loan</CardTitle>
+              <Card className="lg:col-span-1 overflow-hidden border-0 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-purple-500 to-pink-600 text-white">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Heart className="h-4 w-4" />
+                    Select Loan
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
+                <CardContent className="space-y-2 max-h-[500px] overflow-y-auto p-4">
                   {loans.slice(0, 20).map((loan) => (
                     <div
                       key={loan.loan_id}
@@ -381,27 +401,28 @@ export default function SocialLoansPage() {
                         setSelectedLoan(loan.loan_id);
                         loadLoanDetails(loan.loan_id);
                       }}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                      className={`p-4 rounded-xl border cursor-pointer transition-all hover:shadow-md ${
                         selectedLoan === loan.loan_id
-                          ? "border-purple-500 bg-purple-50"
-                          : "hover:bg-slate-50"
+                          ? "border-purple-500 bg-gradient-to-r from-purple-50 to-pink-50 shadow-md"
+                          : "hover:bg-slate-50 border-slate-200"
                       }`}
                     >
-                      <p className="font-medium text-slate-900">{loan.borrower_name}</p>
-                      <p className="text-xs text-slate-500">{loan.loan_id}</p>
+                      <p className="font-semibold text-slate-900">{loan.borrower_name}</p>
+                      <p className="text-xs text-slate-500 mt-1">{loan.loan_id}</p>
                     </div>
                   ))}
                 </CardContent>
               </Card>
 
               {/* SLP Details */}
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="text-base">
+              <Card className="lg:col-span-2 overflow-hidden border-0 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
                     SLP Compliance Assessment
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   {selectedLoan ? (
                     (() => {
                       const details = loanDetails.get(selectedLoan);
@@ -428,22 +449,24 @@ export default function SocialLoansPage() {
                       return (
                         <div className="space-y-6">
                           {/* Overall Score */}
-                          <div className="p-4 bg-slate-50 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
+                          <div className="p-5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border">
+                            <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium">Overall SLP Score</span>
+                                <span className="font-semibold text-lg">Overall SLP Score</span>
                                 {getComplianceIcon(validation.is_slp_compliant)}
                               </div>
-                              <Badge className={getScoreColor(validation.scores.overall)}>
+                              <Badge className={`${validation.is_slp_compliant ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-gradient-to-r from-red-500 to-rose-600'} text-white border-0 px-4 py-2 text-sm font-semibold shadow-md`}>
                                 {validation.is_slp_compliant ? "COMPLIANT" : "NON-COMPLIANT"}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <Progress
-                                value={validation.scores.overall}
-                                className="flex-1 h-3"
-                              />
-                              <span className="text-xl font-bold">
+                            <div className="flex items-center gap-4">
+                              <div className="flex-1 h-4 bg-slate-200 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all ${validation.scores.overall >= 70 ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 'bg-gradient-to-r from-amber-400 to-orange-500'}`}
+                                  style={{ width: `${validation.scores.overall}%` }}
+                                />
+                              </div>
+                              <span className="text-2xl font-bold text-slate-900">
                                 {validation.scores.overall.toFixed(1)}%
                               </span>
                             </div>
@@ -524,14 +547,6 @@ export default function SocialLoansPage() {
                             </div>
                           )}
 
-                          {/* Generate Report */}
-                          <Button
-                            className="w-full bg-purple-600 hover:bg-purple-700"
-                            onClick={() => handleGenerateReport(selectedLoan)}
-                          >
-                            <FileText className="h-4 w-4 mr-2" />
-                            Generate Social Impact Report
-                          </Button>
                         </div>
                       );
                     })()
@@ -591,24 +606,6 @@ export default function SocialLoansPage() {
             </Card>
           </TabsContent>
 
-          {/* Impact Tab */}
-          <TabsContent value="impact">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Users className="h-5 w-5 text-blue-500" />
-                  Social Impact Overview
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-slate-500">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-                  <p>Impact metrics are tracked per loan.</p>
-                  <p className="text-sm">Select a loan and generate a report for detailed impact data.</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </main>
     </div>

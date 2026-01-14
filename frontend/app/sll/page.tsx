@@ -309,11 +309,35 @@ export default function SLLMonitoringPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">SLL Portfolio</TabsTrigger>
-            <TabsTrigger value="kpis">KPI Tracking</TabsTrigger>
-            <TabsTrigger value="spts">SPT Performance</TabsTrigger>
-            <TabsTrigger value="margin">Margin Adjustments</TabsTrigger>
+          <TabsList className="bg-gradient-to-r from-slate-100 to-slate-50 p-1 rounded-xl">
+            <TabsTrigger 
+              value="overview"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <Target className="h-4 w-4 mr-2" />
+              SLL Portfolio
+            </TabsTrigger>
+            <TabsTrigger 
+              value="kpis"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <Gauge className="h-4 w-4 mr-2" />
+              KPI Tracking
+            </TabsTrigger>
+            <TabsTrigger 
+              value="spts"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-green-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              SPT Performance
+            </TabsTrigger>
+            <TabsTrigger 
+              value="margin"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <TrendingDown className="h-4 w-4 mr-2" />
+              Margin Adjustments
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -511,7 +535,7 @@ export default function SLLMonitoringPage() {
                                         <AlertTriangle className="h-4 w-4 text-amber-600" />
                                       )}
                                       <span className="text-slate-600">
-                                        {(kpi.achievement_probability * 100).toFixed(0)}% achievement probability
+                                        {kpi.achievement_probability.toFixed(0)}% achievement probability
                                       </span>
                                     </div>
                                   )}
@@ -592,12 +616,12 @@ export default function SLLMonitoringPage() {
                               <TableCell>
                                 <Badge
                                   className={
-                                    spt.achievement_probability >= 0.7
+                                    spt.achievement_probability >= 70
                                       ? "bg-emerald-100 text-emerald-800"
                                       : "bg-amber-100 text-amber-800"
                                   }
                                 >
-                                  {(spt.achievement_probability * 100).toFixed(0)}%
+                                  {spt.achievement_probability.toFixed(0)}%
                                 </Badge>
                               </TableCell>
                               <TableCell>

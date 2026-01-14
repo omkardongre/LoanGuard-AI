@@ -38,7 +38,6 @@ import {
   assessCarbonLockin,
   screenDNSH,
   fetchTransitionLoansSummary,
-  generateTLPReport,
   type Loan,
   type TLPAssessment,
   type CarbonLockinAssessment,
@@ -179,16 +178,7 @@ export default function TransitionLoansPage() {
     }
   }
 
-  async function handleGenerateReport(loanId: string) {
-    try {
-      const result = await generateTLPReport(loanId);
-      if (result.success) {
-        alert(`TLP Report generated for ${loanId}`);
-      }
-    } catch (err) {
-      console.error("Report generation failed:", err);
-    }
-  }
+
 
   if (loading) {
     return (
@@ -293,11 +283,35 @@ export default function TransitionLoansPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Loan Portfolio</TabsTrigger>
-            <TabsTrigger value="tlp">TLP Validation</TabsTrigger>
-            <TabsTrigger value="carbon">Carbon Lock-in</TabsTrigger>
-            <TabsTrigger value="dnsh">DNSH Screening</TabsTrigger>
+          <TabsList className="bg-gradient-to-r from-slate-100 to-slate-50 p-1 rounded-xl">
+            <TabsTrigger 
+              value="overview"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <ArrowRightLeft className="h-4 w-4 mr-2" />
+              Loan Portfolio
+            </TabsTrigger>
+            <TabsTrigger 
+              value="tlp"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              TLP Validation
+            </TabsTrigger>
+            <TabsTrigger 
+              value="carbon"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-rose-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <Flame className="h-4 w-4 mr-2" />
+              Carbon Lock-in
+            </TabsTrigger>
+            <TabsTrigger 
+              value="dnsh"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <Leaf className="h-4 w-4 mr-2" />
+              DNSH Screening
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -474,14 +488,6 @@ export default function TransitionLoansPage() {
                             </div>
                           </div>
 
-                          {/* Generate Report */}
-                          <Button
-                            className="w-full bg-amber-600 hover:bg-amber-700"
-                            onClick={() => handleGenerateReport(selectedLoan)}
-                          >
-                            <FileText className="h-4 w-4 mr-2" />
-                            Generate TLP Report
-                          </Button>
                         </div>
                       );
                     })()
@@ -498,15 +504,15 @@ export default function TransitionLoansPage() {
 
           {/* Carbon Lock-in Tab */}
           <TabsContent value="carbon">
-            <Card>
-              <CardHeader>
+            <Card className="overflow-hidden border-0 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-red-500 to-rose-600 text-white">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Flame className="h-5 w-5 text-red-500" />
+                  <Flame className="h-5 w-5" />
                   Carbon Lock-in Risk Assessment (LMA TLP Section 3.2.1 iv)
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
+              <CardContent className="p-6">
+                <div className="space-y-6">
                   {selectedLoan ? (
                     (() => {
                       const details = loanDetails.get(selectedLoan);
@@ -519,38 +525,62 @@ export default function TransitionLoansPage() {
                       }
 
                       const cl = details.carbonLockin;
+                      const riskGradient = cl.risk_level === "HIGH" 
+                        ? "from-red-500 to-red-600" 
+                        : cl.risk_level === "MEDIUM" 
+                          ? "from-amber-500 to-orange-600"
+                          : "from-emerald-500 to-teal-600";
+                      
                       return (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                        <div className="space-y-6">
+                          {/* Borrower Header with Risk Badge */}
+                          <div className="flex items-center justify-between p-5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border">
                             <div>
-                              <p className="font-medium">{details.loan.borrower_name}</p>
+                              <p className="font-semibold text-lg text-slate-900">{details.loan.borrower_name}</p>
                               <p className="text-sm text-slate-500">{selectedLoan}</p>
                             </div>
-                            <Badge className={getRiskColor(cl.risk_level)}>
+                            <Badge className={`bg-gradient-to-r ${riskGradient} text-white border-0 px-4 py-2 text-sm font-semibold shadow-md`}>
                               {cl.risk_level} RISK
                             </Badge>
                           </div>
 
+                          {/* Criteria Scores Grid */}
                           <div className="grid grid-cols-2 gap-4">
-                            {Object.entries(cl.criteria_scores || {}).map(([key, value]) => (
-                              <div key={key} className="p-3 border rounded-lg">
-                                <p className="text-xs text-slate-500 capitalize">
-                                  {key.replace(/_/g, " ")}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Progress value={value as number} className="flex-1 h-2" />
-                                  <span className="font-medium">{value}%</span>
+                            {Object.entries(cl.criteria_scores || {}).map(([key, value]) => {
+                              const score = value as number;
+                              const scoreColor = score >= 80 ? "bg-emerald-500" : score >= 60 ? "bg-amber-500" : "bg-red-500";
+                              return (
+                                <div key={key} className="p-4 bg-white border rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                                    {key.replace(/_/g, " ")}
+                                  </p>
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                      <div 
+                                        className={`h-full ${scoreColor} rounded-full transition-all`}
+                                        style={{ width: `${score}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-lg font-bold text-slate-900">{score}%</span>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
 
+                          {/* Recommendations */}
                           {cl.recommendations?.length > 0 && (
-                            <div>
-                              <h4 className="font-medium mb-2">Recommendations</h4>
-                              <ul className="list-disc list-inside space-y-1 text-sm text-slate-600">
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                              <h4 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4" />
+                                Recommendations
+                              </h4>
+                              <ul className="space-y-2">
                                 {cl.recommendations.map((rec, idx) => (
-                                  <li key={idx}>{rec}</li>
+                                  <li key={idx} className="flex items-start gap-2 text-sm text-amber-900">
+                                    <span className="w-5 h-5 rounded-full bg-amber-200 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{idx + 1}</span>
+                                    {rec}
+                                  </li>
                                 ))}
                               </ul>
                             </div>
@@ -571,14 +601,14 @@ export default function TransitionLoansPage() {
 
           {/* DNSH Tab */}
           <TabsContent value="dnsh">
-            <Card>
-              <CardHeader>
+            <Card className="overflow-hidden border-0 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Leaf className="h-5 w-5 text-emerald-500" />
+                  <Leaf className="h-5 w-5" />
                   Do No Significant Harm (DNSH) Screening
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 {selectedLoan ? (
                   (() => {
                     const details = loanDetails.get(selectedLoan);
@@ -590,48 +620,56 @@ export default function TransitionLoansPage() {
                       );
                     }
 
+                    const statusGradient = details.dnsh.overall_status === "PASS" 
+                      ? "from-emerald-500 to-teal-600" 
+                      : "from-red-500 to-rose-600";
+
                     return (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                      <div className="space-y-6">
+                        {/* Borrower Header */}
+                        <div className="flex items-center justify-between p-5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border">
                           <div>
-                            <p className="font-medium">{details.loan.borrower_name}</p>
+                            <p className="font-semibold text-lg text-slate-900">{details.loan.borrower_name}</p>
                             <p className="text-sm text-slate-500">
                               6 EU Taxonomy Environmental Objectives
                             </p>
                           </div>
-                          <Badge
-                            className={
-                              details.dnsh.overall_status === "PASS"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-red-100 text-red-800"
-                            }
-                          >
+                          <Badge className={`bg-gradient-to-r ${statusGradient} text-white border-0 px-4 py-2 text-sm font-semibold shadow-md`}>
                             {details.dnsh.overall_status}
                           </Badge>
                         </div>
 
-                        <div className="space-y-3">
-                          {details.dnsh.objectives?.map((obj) => (
-                            <div
-                              key={obj.objective}
-                              className={`flex items-center justify-between p-3 rounded-lg border ${
-                                obj.status === "PASS"
-                                  ? "bg-emerald-50 border-emerald-200"
-                                  : obj.status === "FAIL"
-                                  ? "bg-red-50 border-red-200"
-                                  : "bg-amber-50 border-amber-200"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                {getStatusIcon(obj.status)}
-                                <span className="text-sm">{obj.objective}</span>
+                        {/* Objectives Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {details.dnsh.objectives?.map((obj) => {
+                            const scoreColor = obj.score >= 80 ? "bg-emerald-500" : obj.score >= 60 ? "bg-amber-500" : "bg-red-500";
+                            const bgColor = obj.status === "PASS" 
+                              ? "bg-emerald-50 border-emerald-200 hover:shadow-emerald-100" 
+                              : obj.status === "FAIL" 
+                                ? "bg-red-50 border-red-200 hover:shadow-red-100"
+                                : "bg-amber-50 border-amber-200 hover:shadow-amber-100";
+                            
+                            return (
+                              <div
+                                key={obj.objective}
+                                className={`p-4 rounded-xl border shadow-sm hover:shadow-md transition-all ${bgColor}`}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    {getStatusIcon(obj.status)}
+                                    <span className="font-medium text-slate-900">{obj.objective}</span>
+                                  </div>
+                                  <span className="text-lg font-bold">{obj.score}%</span>
+                                </div>
+                                <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full ${scoreColor} rounded-full transition-all`}
+                                    style={{ width: `${obj.score}%` }}
+                                  />
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Progress value={obj.score} className="w-16 h-2" />
-                                <span className="text-sm font-medium">{obj.score}%</span>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     );

@@ -147,16 +147,18 @@ export default function ESGPage() {
           ? sptsResponse.value.margin_adjustment
           : undefined;
 
-      // Calculate greenwashing risk based on SPT achievement
-      const achievedCount = spts.filter((s) => s.achieved).length;
+      // Calculate ESG risk based on KPI and SPT progress
+      const avgKpiProgress = kpis.length > 0 
+        ? kpis.reduce((sum, k) => sum + (k.progress_pct || 0), 0) / kpis.length 
+        : 0;
+      const avgSptProgress = spts.length > 0 
+        ? spts.reduce((sum, s) => sum + (s.current_progress || 0), 0) / spts.length 
+        : 0;
+      const overallProgress = (avgKpiProgress + avgSptProgress) / 2;
       const greenwashingRisk =
-        spts.length === 0
-          ? "UNKNOWN"
-          : achievedCount === spts.length
-          ? "LOW"
-          : achievedCount > spts.length / 2
-          ? "MEDIUM"
-          : "HIGH";
+        overallProgress >= 80 ? "LOW" :
+        overallProgress >= 60 ? "MEDIUM" :
+        overallProgress > 0 ? "HIGH" : "UNKNOWN";
 
       setLoanData((prev) => {
         const next = new Map(prev);
@@ -209,7 +211,7 @@ export default function ESGPage() {
 
   const stats = {
     sllLoans: loans.filter((l) => l.is_sll).length || loans.length,
-    sptAchieved: allSpts.filter((s) => s.achieved).length,
+    sptAchieved: allSpts.filter((s) => (s.current_progress || 0) >= 100).length,
     sptTotal: allSpts.length,
     onTrackKpis: allKpis.filter((k) => k.on_track || k.progress_pct >= 70).length,
     atRiskKpis: allKpis.filter((k) => !k.on_track && k.progress_pct < 70).length,
@@ -541,50 +543,51 @@ export default function ESGPage() {
                               <p className="text-sm text-slate-500">No SPTs defined</p>
                             ) : (
                               <div className="space-y-3">
-                                {data.spts.map((spt, idx) => (
-                                  <div
-                                    key={spt.spt_id || idx}
-                                    className={`p-3 rounded-lg border ${
-                                      spt.achieved
-                                        ? "bg-emerald-50 border-emerald-200"
-                                        : "bg-red-50 border-red-200"
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        {spt.achieved ? (
-                                          <CheckCircle className="h-4 w-4 text-emerald-600" />
-                                        ) : (
-                                          <XCircle className="h-4 w-4 text-red-600" />
-                                        )}
-                                        <span className="font-medium">{spt.name}</span>
-                                      </div>
-                                      <Badge
-                                        variant={spt.achieved ? "outline" : "destructive"}
-                                      >
-                                        {spt.achieved ? "ACHIEVED" : "MISSED"}
-                                      </Badge>
-                                    </div>
-                                    <div className="flex justify-between text-sm mt-2 text-slate-600">
-                                      <span>Target: {spt.target_value}</span>
-                                      {spt.actual_value !== undefined && (
-                                        <span>Actual: {spt.actual_value}</span>
-                                      )}
-                                      {spt.variance_pct !== undefined && (
-                                        <span
-                                          className={
-                                            spt.variance_pct < 0
-                                              ? "text-red-600"
-                                              : "text-emerald-600"
-                                          }
+                                {data.spts.map((spt, idx) => {
+                                  const progress = spt.current_progress || 0;
+                                  const isAchieved = progress >= 100;
+                                  const isOnTrack = progress >= 70;
+                                  const status = isAchieved ? "ACHIEVED" : isOnTrack ? "ON TRACK" : "AT RISK";
+                                  const statusColor = isAchieved ? "emerald" : isOnTrack ? "blue" : "amber";
+                                  return (
+                                    <div
+                                      key={spt.spt_id || idx}
+                                      className={`p-3 rounded-lg border ${
+                                        isAchieved
+                                          ? "bg-emerald-50 border-emerald-200"
+                                          : isOnTrack
+                                          ? "bg-blue-50 border-blue-200"
+                                          : "bg-amber-50 border-amber-200"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          {isAchieved ? (
+                                            <CheckCircle className={`h-4 w-4 text-${statusColor}-600`} />
+                                          ) : isOnTrack ? (
+                                            <TrendingUp className="h-4 w-4 text-blue-600" />
+                                          ) : (
+                                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                          )}
+                                          <span className="font-medium">{spt.name}</span>
+                                        </div>
+                                        <Badge
+                                          variant={isAchieved ? "outline" : isOnTrack ? "secondary" : "outline"}
+                                          className={isOnTrack && !isAchieved ? "bg-blue-100 text-blue-800" : !isOnTrack ? "bg-amber-100 text-amber-800" : ""}
                                         >
-                                          {spt.variance_pct > 0 ? "+" : ""}
-                                          {spt.variance_pct.toFixed(1)}%
-                                        </span>
-                                      )}
+                                          {status}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex justify-between text-sm mt-2 text-slate-600">
+                                        <span>Target: {spt.target_value}</span>
+                                        <span>Progress: {progress.toFixed(0)}%</span>
+                                        {spt.target_year && (
+                                          <span>Due: {spt.target_year}</span>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>

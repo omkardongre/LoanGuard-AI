@@ -299,10 +299,28 @@ export default function FundFinancePage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">NAV Facilities</TabsTrigger>
-            <TabsTrigger value="details">Facility Details</TabsTrigger>
-            <TabsTrigger value="ilpa">ILPA Compliance</TabsTrigger>
+          <TabsList className="bg-gradient-to-r from-slate-100 to-slate-50 p-1 rounded-xl">
+            <TabsTrigger 
+              value="overview"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <Building className="h-4 w-4 mr-2" />
+              NAV Facilities
+            </TabsTrigger>
+            <TabsTrigger 
+              value="details"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <Wallet className="h-4 w-4 mr-2" />
+              Facility Details
+            </TabsTrigger>
+            <TabsTrigger 
+              value="ilpa"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all"
+            >
+              <ShieldCheck className="h-4 w-4 mr-2" />
+              ILPA Compliance
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -356,11 +374,11 @@ export default function FundFinancePage() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Progress
-                                value={Math.min(facility.ltv_ratio, 100)}
+                                value={Math.min(facility.ltv_ratio * 100, 100)}
                                 className="h-2 w-16"
                               />
                               <span className="text-sm">
-                                {facility.ltv_ratio.toFixed(1)}%
+                                {(facility.ltv_ratio * 100).toFixed(1)}%
                               </span>
                             </div>
                           </TableCell>

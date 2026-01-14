@@ -331,10 +331,25 @@ export default function ESGPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Portfolio Overview</TabsTrigger>
-            <TabsTrigger value="by-loan">By Loan</TabsTrigger>
-            <TabsTrigger value="carbon">Carbon Tracking</TabsTrigger>
+          <TabsList className="bg-gradient-to-r from-slate-100 to-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <TabsTrigger 
+              value="overview"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-6 py-2.5 font-medium transition-all duration-300 hover:bg-slate-200/50"
+            >
+              🌍 Portfolio Overview
+            </TabsTrigger>
+            <TabsTrigger 
+              value="by-loan"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-6 py-2.5 font-medium transition-all duration-300 hover:bg-slate-200/50"
+            >
+              🏦 By Loan
+            </TabsTrigger>
+            <TabsTrigger 
+              value="carbon"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-6 py-2.5 font-medium transition-all duration-300 hover:bg-slate-200/50"
+            >
+              🔥 Carbon Tracking
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}

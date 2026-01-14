@@ -50,8 +50,9 @@ class EmailAlertAgent:
 Loan Details:
 - Loan ID: {loan_data.get('loan_id', 'N/A')}
 - Borrower: {loan_data.get('borrower_name', 'N/A')}
-- Facility Amount: ${loan_data.get('amount', 0):,.2f}
-- Loan Officer: {loan_data.get('loan_officer', 'N/A')}
+- Facility Amount: ${loan_data.get('facility_amount', 0):,.2f}
+- Agent Bank: {loan_data.get('agent_bank', 'N/A')}
+- Industry: {loan_data.get('industry', 'N/A')}
 
 Breach Details:
 - Covenant Type: {breach_details.get('covenant_type', 'N/A')}
@@ -276,6 +277,7 @@ def send_covenant_breach_alert(
     threshold: str,
     actual_value: str,
     severity: str = "HIGH",
+    recipient_email: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Send covenant breach alert email.
@@ -286,6 +288,7 @@ def send_covenant_breach_alert(
         threshold: Covenant threshold
         actual_value: Actual value that breached
         severity: Breach severity (HIGH, MEDIUM, LOW)
+        recipient_email: Optional specific recipient email address
         
     Returns:
         Send result
@@ -298,9 +301,10 @@ def send_covenant_breach_alert(
     SELECT 
         loan_id,
         borrower_name,
-        amount,
-        loan_officer,
-        currency
+        facility_amount,
+        agent_bank,
+        currency,
+        industry
     FROM `{bq_client.project_id}.{bq_client.dataset_id}.loans`
     WHERE loan_id = '{loan_id}'
     LIMIT 1
@@ -321,29 +325,138 @@ def send_covenant_breach_alert(
             'detected_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         }
         
-        # Get recipients based on severity from database
-        from alert_service.alert_service.tools.notification_tools import get_notification_recipients
+        # Use user-provided recipient email if available, otherwise lookup from database
+        if recipient_email:
+            recipients = [recipient_email]
+            logger.info(f"Using user-provided email: {recipient_email}")
+        else:
+            # Get recipients based on severity from database
+            from alert_service.alert_service.tools.notification_tools import get_notification_recipients
+            
+            recipients_data = get_notification_recipients(loan_id, severity)
+            recipients = recipients_data.get('email_recipients', [])
+            
+            # Fail if no recipients configured (no hardcoded fallback)
+            if not recipients:
+                logger.error(f"No recipients configured for {severity} severity")
+                return {
+                    'success': False,
+                    'error': f'No recipients configured for severity {severity}. Please enter an email address.',
+                    'loan_id': loan_id,
+                    'severity': severity
+                }
         
-        recipients_data = get_notification_recipients(loan_id, severity)
-        recipients = recipients_data.get('email_recipients', [])
+        # Send email directly using SendGrid (simpler, no async issues)
+        import os
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail, Email, To, Content
         
-        # Fail if no recipients configured (no hardcoded fallback)
-        if not recipients:
-            logger.error(f"No recipients configured for {severity} severity")
+        sendgrid_key = os.getenv('SENDGRID_API_KEY')
+        from_email = os.getenv('SENDGRID_FROM_EMAIL', 'kindness.human3@gmail.com')
+        
+        if not sendgrid_key:
             return {
                 'success': False,
-                'error': f'No recipients configured for severity {severity}',
-                'loan_id': loan_id,
-                'severity': severity
+                'error': 'SendGrid API key not configured',
+                'loan_id': loan_id
             }
         
-        # Send email
-        agent = EmailAlertAgent()
-        result = asyncio.run(agent.generate_covenant_breach_email(
-            loan_data, breach_details, recipients
-        ))
+        # Generate email content
+        subject = f"🚨 [{severity}] Covenant Breach Alert - {breach_type} for {loan_data.get('borrower_name', loan_id)}"
         
-        return result
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }}
+                .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                h1 {{ color: #dc2626; border-bottom: 3px solid #dc2626; padding-bottom: 10px; }}
+                .alert {{ background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; }}
+                .metrics {{ display: flex; flex-wrap: wrap; gap: 15px; margin: 20px 0; }}
+                .metric {{ flex: 1; min-width: 120px; padding: 15px; background: #f8f9fa; border-radius: 8px; }}
+                .metric-value {{ font-size: 20px; font-weight: bold; color: #1e3a5f; }}
+                .metric-label {{ font-size: 12px; color: #666; }}
+                .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>⚠️ Covenant Breach Alert</h1>
+                
+                <div class="alert">
+                    <strong>Severity: {severity}</strong><br/>
+                    Immediate attention required for covenant breach.
+                </div>
+                
+                <h2>Loan Details</h2>
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-value">{loan_id}</div>
+                        <div class="metric-label">Loan ID</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{loan_data.get('borrower_name', 'N/A')}</div>
+                        <div class="metric-label">Borrower</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">${loan_data.get('facility_amount', 0):,.0f}</div>
+                        <div class="metric-label">Facility Amount</div>
+                    </div>
+                </div>
+                
+                <h2>Breach Details</h2>
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-value">{breach_type}</div>
+                        <div class="metric-label">Covenant Type</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{threshold}</div>
+                        <div class="metric-label">Threshold</div>
+                    </div>
+                    <div class="metric" style="background: #fef2f2;">
+                        <div class="metric-value" style="color: #dc2626;">{actual_value}</div>
+                        <div class="metric-label">Actual Value</div>
+                    </div>
+                </div>
+                
+                <h2>Recommended Actions</h2>
+                <ol>
+                    <li>Review borrower financial statements immediately</li>
+                    <li>Schedule call with borrower to discuss remediation</li>
+                    <li>Prepare waiver documentation if appropriate</li>
+                    <li>Update risk committee on status within 24 hours</li>
+                </ol>
+                
+                <div class="footer">
+                    <p>This is an automated alert from LoanGuard AI. Generated on {breach_details.get('detected_date', 'N/A')}</p>
+                    <p>LoanGuard AI | Covenant & ESG Compliance Monitoring</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        message = Mail(
+            from_email=Email(from_email),
+            to_emails=[To(email) for email in recipients],
+            subject=subject,
+            html_content=Content("text/html", html_content)
+        )
+        
+        sg = SendGridAPIClient(sendgrid_key)
+        response = sg.send(message)
+        
+        logger.info(f"Covenant breach email sent to {recipients}, status: {response.status_code}")
+        
+        return {
+            'success': True,
+            'message': 'Email sent successfully',
+            'subject': subject,
+            'recipients': recipients,
+            'loan_id': loan_id,
+            'status_code': response.status_code
+        }
         
     except Exception as e:
         logger.error(f"Error sending covenant breach alert: {e}")

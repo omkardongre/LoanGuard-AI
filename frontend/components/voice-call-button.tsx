@@ -272,7 +272,7 @@ export function VoiceCallButton({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           {!callStatus && (
             <Button onClick={handleMakeCall} disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -280,7 +280,21 @@ export function VoiceCallButton({
             </Button>
           )}
           {(callStatus === "done" || callStatus === "failed" || callStatus === "error") && (
-            <Button onClick={() => setOpen(false)}>Close</Button>
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setCallStatus(null);
+                  setConversationId(null);
+                  setTranscript([]);
+                  setError(null);
+                  setLoading(false);
+                }}
+              >
+                Try Again
+              </Button>
+              <Button onClick={() => setOpen(false)}>Close</Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

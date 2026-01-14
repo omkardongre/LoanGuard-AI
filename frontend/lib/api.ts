@@ -68,9 +68,11 @@ export interface SPT {
   spt_id: string;
   name: string;
   target_value: number;
-  actual_value?: number;
-  achieved: boolean;
-  variance_pct?: number;
+  baseline_value?: number;
+  current_progress: number;
+  target_year?: number;
+  achievement_probability?: number;
+  margin_impact_bps?: number;
 }
 
 export interface Alert {
@@ -1526,6 +1528,7 @@ export interface CovenantBreachEmailRequest {
   threshold: string;
   actual_value: string;
   severity?: "HIGH" | "MEDIUM" | "LOW";
+  recipient_email?: string;
 }
 
 export interface PortfolioSummaryEmailRequest {
@@ -1736,7 +1739,7 @@ export async function getSHAPExplanation(
   topN: number = 10
 ): Promise<SHAPExplanation> {
   const response = await fetch(
-    `${API_BASE_URL}/api/covenant/loans/${loanId}/predictions/explain?top_n=${topN}`
+    `${API_BASE_URL}/api/loans/${loanId}/predictions/explain`
   );
 
   if (!response.ok) {

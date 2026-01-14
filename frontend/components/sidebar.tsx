@@ -15,7 +15,6 @@ import {
   BarChart3,
   Wallet,
   ArrowRightLeft,
-  Building2,
   Target,
   Heart,
 } from "lucide-react";
@@ -33,7 +32,6 @@ const navItems = [
   { href: "/fund-finance", label: "Fund Finance", icon: Wallet },
   { href: "/transition-loans", label: "Transition", icon: ArrowRightLeft },
   { href: "/social-loans", label: "Social Loans", icon: Heart },
-  { href: "/sllb", label: "SLLB & Regional", icon: Building2 },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/chat", label: "AI Chat", icon: MessageSquare },
 ];

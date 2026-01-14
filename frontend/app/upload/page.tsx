@@ -36,6 +36,7 @@ interface UploadedFile {
 export default function UploadPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<string>("");
+  const [createdLoanId, setCreatedLoanId] = useState<string | null>(null);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -129,7 +130,7 @@ export default function UploadPage() {
         // Poll for completion (simplified - real implementation would poll)
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Update to complete
+        // Update to complete and capture the created loan ID
         setFiles((prev) =>
           prev.map((f, idx) =>
             idx === fileIndex
@@ -137,6 +138,11 @@ export default function UploadPage() {
               : f
           )
         );
+        
+        // If this was a NEW_LOAN, capture the actual created loan ID
+        if (result.loan_id && result.loan_id !== "NEW_LOAN") {
+          setCreatedLoanId(result.loan_id);
+        }
       } catch (err) {
         setFiles((prev) =>
           prev.map((f, idx) =>
@@ -404,7 +410,7 @@ export default function UploadPage() {
                       </p>
                     </div>
                   </div>
-                  <a href={`/loans/${selectedLoan}`}>
+                  <a href={`/loans/${createdLoanId || (selectedLoan !== "NEW_LOAN" ? selectedLoan : files.find(f => f.result?.loan_id)?.result?.loan_id || selectedLoan)}`}>
                     <Button className="bg-emerald-600 hover:bg-emerald-700">
                       View Loan
                       <ArrowRight className="h-4 w-4 ml-2" />

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Upload, Search, Filter, Loader2, FileText, Briefcase, ExternalLink, Leaf } from "lucide-react";
+import { Upload, Search, Filter, Loader2, FileText, Briefcase, ExternalLink, Leaf, X } from "lucide-react";
 import { fetchLoans, type Loan } from "@/lib/api";
 
 function formatCurrency(amount: number, currency: string = "USD") {
@@ -20,24 +20,49 @@ export default function LoansPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Debounced search
+  const loadLoans = useCallback(async (search?: string, status?: string) => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (search && search.trim()) params.append("search", search.trim());
+      if (status && status !== "ALL") params.append("status", status);
+      
+      const url = `http://localhost:8080/api/loans${params.toString() ? `?${params.toString()}` : ""}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setLoans(data.loans || []);
+      setTotal(data.total || 0);
+    } catch (err) {
+      console.error("Failed to fetch loans:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function loadLoans() {
-      try {
-        setLoading(true);
-        const data = await fetchLoans();
-        setLoans(data.loans);
-        setTotal(data.total);
-      } catch (err) {
-        console.error("Failed to fetch loans:", err);
-        // Keep empty state on error
-      } finally {
-        setLoading(false);
-      }
-    }
     loadLoans();
-  }, []);
-  if (loading) {
+  }, [loadLoans]);
+
+  // Search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadLoans(searchTerm, statusFilter);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, statusFilter, loadLoans]);
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("");
+    setShowFilters(false);
+  };
+
+  if (loading && loans.length === 0) {
     return (
       <div className="flex min-h-screen bg-slate-50">
         <Sidebar />
@@ -72,21 +97,83 @@ export default function LoansPage() {
           </a>
         </div>
 
-        {/* Filters */}
+        {/* Search & Filters */}
         <div className="flex gap-4 mb-6">
           <div className="flex-1 relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
             <input
               type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by borrower, loan ID..."
-              className="w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-0 focus:border-emerald-500 transition-colors bg-white shadow-sm"
+              className="w-full pl-12 pr-10 py-3 border-2 rounded-xl focus:outline-none focus:ring-0 focus:border-emerald-500 transition-colors bg-white shadow-sm"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          <Button variant="outline" className="px-6 rounded-xl border-2 hover:bg-slate-50 hover:border-slate-300 transition-all">
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
+          <div className="relative">
+            <Button
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className={`px-6 rounded-xl border-2 hover:bg-slate-50 hover:border-slate-300 transition-all ${statusFilter ? "border-emerald-500 bg-emerald-50" : ""}`}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters {statusFilter && `(${statusFilter})`}
+            </Button>
+            {showFilters && (
+              <div className="absolute top-full mt-2 right-0 bg-white border rounded-xl shadow-lg p-4 z-10 min-w-48">
+                <h4 className="font-semibold mb-3 text-slate-700">Status</h4>
+                <div className="flex flex-col gap-2">
+                  {["ALL", "GREEN", "AMBER", "RED"].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { setStatusFilter(s === "ALL" ? "" : s); setShowFilters(false); }}
+                      className={`text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        (s === "ALL" && !statusFilter) || statusFilter === s
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "hover:bg-slate-100"
+                      }`}
+                    >
+                      {s === "ALL" ? "All Status" : s === "GREEN" ? "✅ Compliant" : s === "AMBER" ? "⚠️ Warning" : "❌ Breach"}
+                    </button>
+                  ))}
+                </div>
+                {(searchTerm || statusFilter) && (
+                  <button onClick={clearFilters} className="mt-3 text-sm text-red-600 hover:underline">
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Active Filters */}
+        {(searchTerm || statusFilter) && (
+          <div className="flex gap-2 mb-4">
+            {searchTerm && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                Search: "{searchTerm}"
+                <button onClick={() => setSearchTerm("")}><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {statusFilter && (
+              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
+                statusFilter === "GREEN" ? "bg-emerald-100 text-emerald-800" :
+                statusFilter === "AMBER" ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"
+              }`}>
+                Status: {statusFilter}
+                <button onClick={() => setStatusFilter("")}><X className="h-3 w-3" /></button>
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Loans Table */}
         <div className="bg-white rounded-2xl border shadow-lg overflow-hidden">

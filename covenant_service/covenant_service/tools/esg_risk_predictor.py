@@ -20,7 +20,21 @@ class ESGRiskPredictor:
     based on ESG metrics and environmental impact data.
     """
     
-    MODEL_DIR = Path(__file__).parent.parent.parent.parent / "models"
+    @staticmethod
+    def _get_model_dir() -> Path:
+        """Get model directory path, works in both local and Docker."""
+        import os
+        if os.environ.get("MODEL_DIR"):
+            return Path(os.environ["MODEL_DIR"])
+        local_path = Path(__file__).parent.parent.parent.parent / "models"
+        if local_path.exists():
+            return local_path
+        docker_path = Path("/app/models")
+        if docker_path.exists():
+            return docker_path
+        return Path.cwd() / "models"
+    
+    MODEL_DIR = None  # Will be set in __init__
     
     # Risk level descriptions
     RISK_DESCRIPTIONS = {
@@ -41,7 +55,7 @@ class ESGRiskPredictor:
         if model_dir:
             self.model_dir = Path(model_dir)
         else:
-            self.model_dir = self.MODEL_DIR
+            self.model_dir = self._get_model_dir()
         
         self.model = None
         self.preprocessor = None

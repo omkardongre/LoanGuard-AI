@@ -1,0 +1,26 @@
+# .gcloudignore - Controls what Cloud Build uploads
+# This overrides .gitignore for Cloud Run deployments
+
+# Include .gitignore patterns EXCEPT models/
+#!include:.gitignore
+
+# Explicitly exclude large/unnecessary files
+.env
+.env.local
+.git/
+.github/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+frontend/
+self-docs/
+tests/
+.secrets/
+*.log
+
+# DO NOT EXCLUDE models/ - Required for ML features
+# The models directory contains pre-trained ML models

@@ -1,0 +1,17 @@
+.env
+.env.local
+.git
+.github
+.gitignore
+venv/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+frontend/
+self-docs/
+tests/
+# models/ - MUST be included for ML features
+.secrets/

@@ -21,8 +21,21 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Model paths
-MODEL_DIR = Path(__file__).parent.parent.parent.parent / "models"
+# Model paths - detect app root for Docker compatibility
+def _get_model_dir() -> Path:
+    """Get model directory path, works in both local and Docker."""
+    import os
+    if os.environ.get("MODEL_DIR"):
+        return Path(os.environ["MODEL_DIR"])
+    local_path = Path(__file__).parent.parent.parent.parent / "models"
+    if local_path.exists():
+        return local_path
+    docker_path = Path("/app/models")
+    if docker_path.exists():
+        return docker_path
+    return Path.cwd() / "models"
+
+MODEL_DIR = _get_model_dir()
 STAGE1_MODEL_PATH = MODEL_DIR / "lgd_stage1_classifier.pkl"
 STAGE2_MODEL_PATH = MODEL_DIR / "lgd_stage2_regressor.pkl"
 STAGE1_EXPLAINER_PATH = MODEL_DIR / "lgd_stage1_explainer.pkl"

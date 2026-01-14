@@ -17,8 +17,28 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Model file paths
-MODEL_DIR = Path(__file__).parent.parent.parent.parent / "models"
+# Model file paths - detect app root for Docker compatibility
+def _get_model_dir() -> Path:
+    """Get model directory path, works in both local and Docker."""
+    import os
+    # Check for explicit environment variable first
+    if os.environ.get("MODEL_DIR"):
+        return Path(os.environ["MODEL_DIR"])
+    
+    # Try relative path from this file (works locally)
+    local_path = Path(__file__).parent.parent.parent.parent / "models"
+    if local_path.exists():
+        return local_path
+    
+    # Try Docker path (WORKDIR is /app)
+    docker_path = Path("/app/models")
+    if docker_path.exists():
+        return docker_path
+    
+    # Fallback to current working directory
+    return Path.cwd() / "models"
+
+MODEL_DIR = _get_model_dir()
 MODEL_PATH = MODEL_DIR / "breach_predictor.pkl"
 EXPLAINER_PATH = MODEL_DIR / "breach_predictor_explainer.pkl"
 BASE_VALUE_PATH = MODEL_DIR / "breach_predictor_base_value.json"

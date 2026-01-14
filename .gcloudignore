@@ -1,26 +1,43 @@
 # .gcloudignore - Controls what Cloud Build uploads
-# This overrides .gitignore for Cloud Run deployments
+# This OVERRIDES .gitignore for Cloud Run deployments
 
-# Include .gitignore patterns EXCEPT models/
+# First, include the default .gitignore patterns
 #!include:.gitignore
 
-# Explicitly exclude large/unnecessary files
+# THEN explicitly RE-INCLUDE models that gitignore excludes
+# The ! prefix means "include even if previously excluded"
+!models/
+!models/**
+!models/*.pkl
+!models/*.json
+
+# Exclude things we don't need in deployment
 .env
 .env.local
+.env.*.local
 .git/
 .github/
+.vscode/
+.idea/
 venv/
-node_modules/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .DS_Store
+*.log
+*.tmp
+
+# Exclude frontend (deployed separately on Vercel)
 frontend/
+
+# Exclude docs and tests (not needed in production)
 self-docs/
 tests/
-.secrets/
-*.log
+*.md
+!README.md
 
-# DO NOT EXCLUDE models/ - Required for ML features
-# The models directory contains pre-trained ML models
+# Exclude secrets
+.secrets/
+*.pem
+*.key

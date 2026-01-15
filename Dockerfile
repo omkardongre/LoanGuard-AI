@@ -1,6 +1,6 @@
 # LoanGuard AI API Gateway - Google Cloud Run Dockerfile
 # Best practices: https://cloud.google.com/run/docs/quickstarts/build-and-deploy/python
-FROM python:3.11-slim-bullseye
+FROM python:3.10-slim-bullseye
 
 WORKDIR /app
 

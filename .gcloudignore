@@ -1,17 +1,17 @@
 # .gcloudignore - Controls what Cloud Build uploads
 # This OVERRIDES .gitignore for Cloud Run deployments
+# 
+# CRITICAL: DO NOT use #!include:.gitignore as that would exclude models/*.pkl
+# which are ignored in .gitignore but REQUIRED for ML functionality
 
-# First, include the default .gitignore patterns
-#!include:.gitignore
-
-# THEN explicitly RE-INCLUDE models that gitignore excludes
-# The ! prefix means "include even if previously excluded"
+# === EXPLICITLY INCLUDE ML MODELS ===
+# These are excluded by .gitignore but REQUIRED for deployment
 !models/
 !models/**
 !models/*.pkl
 !models/*.json
 
-# Exclude things we don't need in deployment
+# === EXCLUDE DEVELOPMENT FILES ===
 .env
 .env.local
 .env.*.local
@@ -19,7 +19,6 @@
 .github/
 .vscode/
 .idea/
-venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -28,16 +27,29 @@ __pycache__/
 *.log
 *.tmp
 
-# Exclude frontend (deployed separately on Vercel)
-frontend/
+# === EXCLUDE VIRTUAL ENVIRONMENT ===
+venv/
+.venv/
+env/
 
-# Exclude docs and tests (not needed in production)
+# === EXCLUDE FRONTEND (deployed separately on Vercel) ===
+frontend/
+node_modules/
+
+# === EXCLUDE DOCS AND TESTS ===
 self-docs/
 tests/
 *.md
 !README.md
 
-# Exclude secrets
+# === EXCLUDE SECRETS ===
 .secrets/
 *.pem
 *.key
+
+# === EXCLUDE UNNECESSARY FILES ===
+.dockerignore
+.gitignore
+.gcloudignore
+Makefile
+docker-compose*.yml

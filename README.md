@@ -28,8 +28,8 @@ LoanGuard AI transforms how banks manage syndicated loans by combining **real-ti
 |-------|------------|
 | **Frontend** | Next.js 15, React, Tailwind CSS |
 | **Backend** | Python, FastAPI, Google Cloud Run |
-| **Database** | Google BigQuery (16 tables) |
-| **AI/ML** | Gemini 2.0, LightGBM, XGBoost, SHAP |
+| **Database** | Google BigQuery (29 tables) |
+| **AI/ML** | Gemini 2.5 Flash, LightGBM, XGBoost, SHAP |
 | **Document AI** | Affinda REST API |
 | **External APIs** | FRED (macro data), Climatiq (carbon), SendGrid (email), ElevenLabs (voice) |
 
@@ -50,6 +50,50 @@ LoanGuard AI transforms how banks manage syndicated loans by combining **real-ti
 
 - **Frontend**: [Deployed on Vercel]
 - **Backend**: `https://loanguard-api-403714473978.us-central1.run.app`
+
+---
+
+## 🚀 Quick Start (Local Development)
+
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- Google Cloud credentials (for BigQuery)
+
+### Backend Setup
+```bash
+cd /home/om/lma
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Set environment variables
+export GOOGLE_APPLICATION_CREDENTIALS="path/to/credentials.json"
+export GEMINI_API_KEY="your-key"
+
+# Run API Gateway
+python -m api_gateway.main
+# Backend runs at http://localhost:8080
+```
+
+### Frontend Setup
+```bash
+cd /home/om/lma/frontend
+npm install
+npm run dev
+# Frontend runs at http://localhost:3000
+```
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure all required API keys:
+
+```bash
+cp .env.example .env
+# Edit .env with your API keys
+```
+
+See `.env.example` for the complete list of required environment variables.
 
 ---
 

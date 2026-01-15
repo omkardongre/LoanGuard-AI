@@ -32,7 +32,8 @@ export default function LoansPage() {
       if (search && search.trim()) params.append("search", search.trim());
       if (status && status !== "ALL") params.append("status", status);
       
-      const url = `http://localhost:8080/api/loans${params.toString() ? `?${params.toString()}` : ""}`;
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const url = `${API_BASE}/api/loans${params.toString() ? `?${params.toString()}` : ""}`;
       const res = await fetch(url);
       const data = await res.json();
       setLoans(data.loans || []);

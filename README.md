@@ -68,13 +68,13 @@ lma/
 
 ---
 
-## 🏆 LMA Edge Hackathon Categories
+## 🎯 Use Cases
 
-This project addresses multiple hackathon categories:
+This platform addresses key challenges in loan portfolio management:
 
 - ✅ **Digital Loans** - AI-powered loan portfolio management
-- ✅ **Keeping Loans on Track** - Real-time covenant monitoring & breach prediction
-- ✅ **Greener Lending** - ESG compliance, carbon tracking, SLL monitoring
+- ✅ **Covenant Monitoring** - Real-time tracking & breach prediction
+- ✅ **Green Finance** - ESG compliance, carbon tracking, SLL monitoring
 
 ---
 
